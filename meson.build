@@ -1544,7 +1544,7 @@ have = get_option('imds').require(
         conf.get('HAVE_LIBCURL') == 1,
         error_message : 'curl required').allowed()
 conf.set10('ENABLE_IMDS', have)
-conf.set10('IMDS_NETWORK_LOCKED_DEFAULT', get_option('imds-network') == 'locked')
+conf.set('IMDS_NETWORK_DEFAULT', 'IMDS_NETWORK_@0@'.format(get_option('imds-network')).to_upper())
 
 have = get_option('importd').require(
         conf.get('HAVE_LIBCURL') == 1 and
@@ -2969,6 +2969,45 @@ if meson.version().version_compare('>=1.4.0')
                                 )
                         endif
                 endforeach
+        endforeach
+endif
+
+spatch = find_program('spatch', required : false)
+if spatch.found()
+        # Directories excluded from coccinelle checks until their warnings are fixed.
+        # Remove directories from this list as they are cleaned up.
+        coccinelle_exclude = [
+                'src/basic/',
+                'src/core/',
+                'src/import/',
+                'src/journal/',
+                'src/libc/',
+                'src/libsystemd/',
+                'src/libsystemd-network/',
+                'src/network/',
+                'src/nspawn/',
+                'src/nss-systemd/',
+                'src/resolve/',
+                'src/shared/',
+                'src/test/',
+        ]
+
+        coccinelle_src_dirs = run_command(
+                'sh', '-c', 'printf "%s\n" src/*/',
+                check : true,
+        ).stdout().strip().split('\n')
+
+        foreach dir : coccinelle_src_dirs
+                if dir not in coccinelle_exclude
+                        test(
+                                'coccinelle-@0@'.format(fs.name(dir)),
+                                check_coccinelle_sh,
+                                args : [meson.project_source_root() / dir,
+                                        meson.project_source_root() / 'coccinelle'],
+                                suite : 'coccinelle',
+                                timeout : 120,
+                        )
+                endif
         endforeach
 endif
 
