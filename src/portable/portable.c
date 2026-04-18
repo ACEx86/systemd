@@ -524,7 +524,7 @@ static int portable_extract_by_path(
                                 seq[0] = safe_close(seq[0]);
                                 errno_pipe_fd[0] = safe_close(errno_pipe_fd[0]);
 
-                                if (setns(CLONE_NEWUSER, userns_fd) < 0) {
+                                if (setns(userns_fd, CLONE_NEWUSER) < 0) {
                                         r = log_debug_errno(errno, "Failed to join userns: %m");
                                         report_errno_and_exit(errno_pipe_fd[1], r);
                                 }
@@ -1271,18 +1271,13 @@ static int portable_changes_add_with_prefix(
         return portable_changes_add(changes, n_changes, type_or_errno, path, source);
 }
 
-void portable_changes_free(PortableChange *changes, size_t n_changes) {
-        size_t i;
-
-        assert(changes || n_changes == 0);
-
-        for (i = 0; i < n_changes; i++) {
-                free(changes[i].path);
-                free(changes[i].source);
-        }
-
-        free(changes);
+static void portable_change_done(PortableChange *change) {
+        assert(change);
+        change->path = mfree(change->path);
+        change->source = mfree(change->source);
 }
+
+DEFINE_ARRAY_FREE_FUNC(portable_changes_free, PortableChange, portable_change_done);
 
 static const char *root_setting_from_image(ImageType type) {
         switch (type) {

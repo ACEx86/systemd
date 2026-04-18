@@ -312,6 +312,10 @@ units = [
           'symlinks' : ['initrd.target.wants/'],
         },
         {
+          'file' : 'systemd-confext-sysroot.service',
+          'conditions' : ['ENABLE_INITRD', 'ENABLE_SYSEXT'],
+        },
+        {
           'file' : 'systemd-coredump.socket',
           'conditions' : ['ENABLE_COREDUMP'],
           'symlinks' : ['sockets.target.wants/', 'system-update-pre.target.wants/'],
@@ -624,6 +628,8 @@ units = [
           'conditions' : ['ENABLE_BOOTLOADER', 'HAVE_OPENSSL', 'HAVE_TPM2'],
           'symlinks' : ['sysinit.target.wants/'],
         },
+        { 'file' : 'systemd-report-basic.socket' },
+        { 'file' : 'systemd-report-basic@.service.in' },
         {
           'file' : 'systemd-tpm2-clear.service.in',
           'conditions' : ['ENABLE_BOOTLOADER', 'HAVE_OPENSSL', 'HAVE_TPM2'],
@@ -718,6 +724,8 @@ units = [
           'file' : 'systemd-repart@.service',
           'conditions' : ['ENABLE_REPART'],
         },
+        { 'file' : 'systemd-report-cgroup.socket' },
+        { 'file' : 'systemd-report-cgroup@.service.in' },
         {
           'file' : 'systemd-resolved.service.in',
           'conditions' : ['ENABLE_RESOLVE'],
@@ -756,6 +764,10 @@ units = [
           'file' : 'systemd-sysext-initrd.service',
           'conditions' : ['ENABLE_INITRD', 'ENABLE_SYSEXT'],
           'symlinks' : ['initrd.target.wants/'],
+        },
+        {
+          'file' : 'systemd-sysext-sysroot.service',
+          'conditions' : ['ENABLE_INITRD', 'ENABLE_SYSEXT'],
         },
         {
           'file' : 'systemd-sysext.socket',

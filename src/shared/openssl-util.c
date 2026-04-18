@@ -487,6 +487,9 @@ int rsa_encrypt_bytes(
         _cleanup_free_ void *b = NULL;
         size_t l;
 
+        assert(ret_encrypt_key);
+        assert(ret_encrypt_key_size);
+
         ctx = EVP_PKEY_CTX_new(pkey, NULL);
         if (!ctx)
                 return log_openssl_errors("Failed to allocate public key context");
@@ -1097,6 +1100,11 @@ static int ecc_pkey_generate_volume_keys(
                 void **ret_saved_key,
                 size_t *ret_saved_key_size) {
 
+        assert(ret_decrypted_key);
+        assert(ret_decrypted_key_size);
+        assert(ret_saved_key);
+        assert(ret_saved_key_size);
+
         _cleanup_(EVP_PKEY_freep) EVP_PKEY *pkey_new = NULL;
         _cleanup_(erase_and_freep) void *decrypted_key = NULL;
         _cleanup_free_ unsigned char *saved_key = NULL;
@@ -1149,6 +1157,11 @@ static int rsa_pkey_generate_volume_keys(
         _cleanup_free_ void *saved_key = NULL;
         size_t decrypted_key_size, saved_key_size;
         int r;
+
+        assert(ret_decrypted_key);
+        assert(ret_decrypted_key_size);
+        assert(ret_saved_key);
+        assert(ret_saved_key_size);
 
         r = rsa_pkey_to_suitable_key_size(pkey, &decrypted_key_size);
         if (r < 0)
@@ -1339,13 +1352,13 @@ static int openssl_load_private_key_from_file(const char *path, EVP_PKEY **ret) 
                 return log_debug_errno(SYNTHETIC_ERRNO(EIO), "Failed to parse PEM private key: %s",
                                        ERR_error_string(ERR_get_error(), NULL));
 
-        if (ret)
-                *ret = TAKE_PTR(pk);
+        *ret = TAKE_PTR(pk);
 
         return 0;
 }
 
 static int openssl_ask_password_ui_new(const AskPasswordRequest *request, OpenSSLAskPasswordUI **ret) {
+        assert(request);
         assert(ret);
 
 #ifndef OPENSSL_NO_UI_CONSOLE
@@ -1404,8 +1417,7 @@ static int load_x509_certificate_from_file(const char *path, X509 **ret) {
                 return log_debug_errno(SYNTHETIC_ERRNO(EBADMSG), "Failed to parse X.509 certificate: %s",
                                        ERR_error_string(ERR_get_error(), NULL));
 
-        if (ret)
-                *ret = TAKE_PTR(cert);
+        *ret = TAKE_PTR(cert);
 
         return 0;
 }

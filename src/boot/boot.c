@@ -20,6 +20,7 @@
 #include "part-discovery.h"
 #include "pe.h"
 #include "proto/block-io.h"
+#include "proto/disk-io.h"
 #include "proto/load-file.h"
 #include "proto/simple-text-io.h"
 #include "random-seed.h"
@@ -1917,11 +1918,15 @@ static void config_select_default_entry(Config *config) {
         }
 
         /* select the first suitable entry */
-        for (i = 0; i < config->n_entries; i++)
+        for (i = 0; i < config->n_entries; i++) {
+                if (config->entries[i]->profile > 0)
+                        continue; /* For now, never select any non-default profile */
+
                 if (LOADER_TYPE_MAY_AUTO_SELECT(config->entries[i]->type)) {
                         config->idx_default = i;
                         return;
                 }
+        }
 
         /* If no configured entry to select from was found, enable the menu. */
         config->idx_default = 0;
@@ -2165,22 +2170,19 @@ static EFI_STATUS call_boot_windows_bitlocker(const BootEntry *entry, EFI_FILE *
                 if (err != EFI_SUCCESS || block_io->Media->BlockSize < 512 || block_io->Media->BlockSize > 4096)
                         continue;
 
-                #define BLOCK_IO_BUFFER_SIZE 4096
-                _cleanup_pages_ Pages buf_pages = xmalloc_aligned_pages(
-                        AllocateMaxAddress,
-                        EfiLoaderData,
-                        EFI_SIZE_TO_PAGES(BLOCK_IO_BUFFER_SIZE),
-                        block_io->Media->IoAlign,
-                        /* On 32-bit allocate below 4G boundary as we can't easily access anything above that.
-                         * 64-bit platforms don't suffer this limitation, so we can allocate from anywhere.
-                         * addr= */ UINTPTR_MAX);
-                char *buf = PHYSICAL_ADDRESS_TO_POINTER(buf_pages.addr);
+                EFI_DISK_IO_PROTOCOL *disk_io;
+                err = BS->HandleProtocol(handles[i], MAKE_GUID_PTR(EFI_DISK_IO_PROTOCOL), (void **) &disk_io);
+                if (err != EFI_SUCCESS) {
+                        log_debug_status(err, "Failed to get disk I/O protocol: %m");
+                        continue;
+                }
 
-                err = block_io->ReadBlocks(block_io, block_io->Media->MediaId, /* LBA= */ 0, BLOCK_IO_BUFFER_SIZE, buf);
+                char buf[STRLEN("-FVE-FS-")];
+                err = disk_io->ReadDisk(disk_io, block_io->Media->MediaId, /* Offset= */ 3, sizeof(buf), buf);
                 if (err != EFI_SUCCESS)
                         continue;
 
-                if (memcmp(buf + 3, "-FVE-FS-", STRLEN("-FVE-FS-")) == 0) {
+                if (memcmp(buf, "-FVE-FS-", STRLEN("-FVE-FS-")) == 0) {
                         found = true;
                         break;
                 }
@@ -2717,7 +2719,12 @@ static EFI_STATUS expand_path(
                 if (IN_SET(err, EFI_NOT_FOUND, EFI_INVALID_PARAMETER))
                         continue; /* Skip over LoadFile() handles that after all don't consider themselves
                                    * appropriate for this kind of path */
-                if (err != EFI_BUFFER_TOO_SMALL) {
+                if (!IN_SET(err, EFI_SUCCESS, EFI_BUFFER_TOO_SMALL)) {
+                        /* NB: firmwares are supposed to return EFI_BUFFER_TOO_SMALL whenever we pass a NULL
+                         * buffer. But for compatibility with quirky firmwares let's be lenient for the
+                         * special case of a zero sized file: the firmware might return EFI_SUCCESS here and
+                         * initialize the size to zero, as a buffer is not actually necessary for that
+                         * case. */
                         log_warning_status(err, "Failed to get file via LoadFile() protocol, ignoring: %m");
                         continue;
                 }

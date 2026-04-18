@@ -189,6 +189,9 @@ static int parse_line(
         assert(line > 0);
         assert(lookup);
         assert(l);
+        assert(section);
+        assert(section_line);
+        assert(section_ignored);
 
         l = strstrip(l);
         if (isempty(l))
@@ -917,6 +920,8 @@ static int _hashmap_by_section_find_unused_line(
         ConfigSection *cs;
         unsigned n = 0;
         void *entry;
+
+        assert(ret);
 
         HASHMAP_BASE_FOREACH_KEY(entry, cs, entries_by_section) {
                 if (filename && !streq(cs->filename, filename))

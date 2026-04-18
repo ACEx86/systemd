@@ -14,7 +14,8 @@ static void test_option_parse_one(
                 char **argv,
                 const Option options[],
                 const Entry *entries,
-                char **remaining) {
+                char **remaining,
+                OptionParserMode mode) {
 
         _cleanup_free_ char *joined = strv_join(argv, ", ");
         log_debug("/* %s(%s) */", __func__, joined);
@@ -31,10 +32,10 @@ static void test_option_parse_one(
         for (const Entry *e = entries; e && (e->long_code || e->short_code != 0); e++)
                 n_entries++;
 
-        OptionParser state = {};
+        OptionParser state = { argc, argv, mode };
         const Option *opt;
         const char *arg;
-        for (int c; (c = option_parse(options, options + n_options, &state, argc, argv, &opt, &arg)) != 0; ) {
+        for (int c; (c = option_parse(options, options + n_options, &state, &opt, &arg)) != 0; ) {
                 ASSERT_OK(c);
                 ASSERT_NOT_NULL(opt);
 
@@ -54,11 +55,11 @@ static void test_option_parse_one(
 
         ASSERT_EQ(i, n_entries);
 
-        char **args = option_parser_get_args(&state, argc, argv);
+        char **args = option_parser_get_args(&state);
         ASSERT_TRUE(strv_equal(args, remaining));
         ASSERT_STREQ(argv[0], saved_argv0);
 
-        ASSERT_EQ(option_parser_get_n_args(&state, argc, argv), strv_length(remaining));
+        ASSERT_EQ(option_parser_get_n_args(&state), strv_length(remaining));
 }
 
 static void test_option_invalid_one(
@@ -77,11 +78,11 @@ static void test_option_invalid_one(
         for (const Option *o = options; o->short_code != 0 || o->long_code; o++)
                 n_options++;
 
-        OptionParser state = {};
+        OptionParser state = { argc, argv };
         const Option *opt;
         const char *arg;
 
-        int c = option_parse(options, options + n_options, &state, argc, argv, &opt, &arg);
+        int c = option_parse(options, options + n_options, &state, &opt, &arg);
         ASSERT_ERROR(c, EINVAL);
 }
 
@@ -99,7 +100,8 @@ TEST(option_parse) {
         test_option_parse_one(STRV_MAKE("arg0"),
                               options,
                               NULL,
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         test_option_parse_one(STRV_MAKE("arg0",
                                         "string1",
@@ -111,7 +113,8 @@ TEST(option_parse) {
                               STRV_MAKE("string1",
                                         "string2",
                                         "string3",
-                                        "string4"));
+                                        "string4"),
+                              OPTION_PARSER_NORMAL);
 
         test_option_parse_one(STRV_MAKE("arg0",
                                         "--",
@@ -124,7 +127,8 @@ TEST(option_parse) {
                               STRV_MAKE("string1",
                                         "--help",
                                         "-h",
-                                        "string4"));
+                                        "string4"),
+                              OPTION_PARSER_NORMAL);
 
         test_option_parse_one(STRV_MAKE("arg0",
                                         "string1",
@@ -137,7 +141,8 @@ TEST(option_parse) {
                               STRV_MAKE("string1",
                                         "string2",
                                         "--",
-                                        "string4"));
+                                        "string4"),
+                              OPTION_PARSER_NORMAL);
 
         test_option_parse_one(STRV_MAKE("arg0",
                                         "string1",
@@ -150,7 +155,8 @@ TEST(option_parse) {
                               STRV_MAKE("string1",
                                         "string2",
                                         "string3",
-                                        "string4"));
+                                        "string4"),
+                              OPTION_PARSER_NORMAL);
 
         test_option_parse_one(STRV_MAKE("arg0",
                                         "--help"),
@@ -159,7 +165,21 @@ TEST(option_parse) {
                                       { "help" },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
+
+        test_option_parse_one(STRV_MAKE("arg0",
+                                        "--help",
+                                        "string1",
+                                        "--help"),
+                              options,
+                              (Entry[]) {
+                                      { "help" },
+                                      {}
+                              },
+                              STRV_MAKE("string1",
+                                        "--help"),
+                              OPTION_PARSER_STOP_AT_FIRST_NONOPTION);
 
         test_option_parse_one(STRV_MAKE("arg0",
                                         "-h"),
@@ -168,7 +188,8 @@ TEST(option_parse) {
                                       { "help" },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         test_option_parse_one(STRV_MAKE("arg0",
                                         "--help",
@@ -184,7 +205,8 @@ TEST(option_parse) {
                               STRV_MAKE("string1",
                                         "string2",
                                         "string3",
-                                        "string4"));
+                                        "string4"),
+                              OPTION_PARSER_NORMAL);
 
         test_option_parse_one(STRV_MAKE("arg0",
                                         "-h",
@@ -200,7 +222,8 @@ TEST(option_parse) {
                               STRV_MAKE("string1",
                                         "string2",
                                         "string3",
-                                        "string4"));
+                                        "string4"),
+                              OPTION_PARSER_NORMAL);
 
         test_option_parse_one(STRV_MAKE("arg0",
                                         "string1",
@@ -216,7 +239,8 @@ TEST(option_parse) {
                               STRV_MAKE("string1",
                                         "string2",
                                         "string3",
-                                        "string4"));
+                                        "string4"),
+                              OPTION_PARSER_NORMAL);
 
         test_option_parse_one(STRV_MAKE("arg0",
                                         "string1",
@@ -232,7 +256,8 @@ TEST(option_parse) {
                               STRV_MAKE("string1",
                                         "string2",
                                         "string3",
-                                        "string4"));
+                                        "string4"),
+                              OPTION_PARSER_NORMAL);
 
         test_option_parse_one(STRV_MAKE("arg0",
                                         "string1",
@@ -248,7 +273,8 @@ TEST(option_parse) {
                               STRV_MAKE("string1",
                                         "string2",
                                         "string3",
-                                        "string4"));
+                                        "string4"),
+                              OPTION_PARSER_NORMAL);
 
         test_option_parse_one(STRV_MAKE("arg0",
                                         "string1",
@@ -264,7 +290,8 @@ TEST(option_parse) {
                               STRV_MAKE("string1",
                                         "string2",
                                         "string3",
-                                        "string4"));
+                                        "string4"),
+                              OPTION_PARSER_NORMAL);
 
         test_option_parse_one(STRV_MAKE("arg0",
                                         "--required1", "reqarg1"),
@@ -273,7 +300,8 @@ TEST(option_parse) {
                                       { "required1", "reqarg1" },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         test_option_parse_one(STRV_MAKE("arg0",
                                         "-r", "reqarg1"),
@@ -282,7 +310,8 @@ TEST(option_parse) {
                                       { "required1", "reqarg1" },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         test_option_parse_one(STRV_MAKE("arg0",
                                         "string1",
@@ -294,7 +323,19 @@ TEST(option_parse) {
                                       {}
                               },
                               STRV_MAKE("string1",
-                                        "string2"));
+                                        "string2"),
+                              OPTION_PARSER_NORMAL);
+
+        test_option_parse_one(STRV_MAKE("arg0",
+                                        "string1",
+                                        "string2",
+                                        "-r", "reqarg1"),
+                              options,
+                              NULL,
+                              STRV_MAKE("string1",
+                                        "string2",
+                                        "-r", "reqarg1"),
+                              OPTION_PARSER_STOP_AT_FIRST_NONOPTION);
 
         test_option_parse_one(STRV_MAKE("arg0",
                                         "--optional1=optarg1"),
@@ -303,7 +344,8 @@ TEST(option_parse) {
                                       { "optional1", "optarg1" },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_STOP_AT_FIRST_NONOPTION);
 
         test_option_parse_one(STRV_MAKE("arg0",
                                         "--optional1", "string1"),
@@ -312,7 +354,8 @@ TEST(option_parse) {
                                       { "optional1", NULL },
                                       {}
                               },
-                              STRV_MAKE("string1"));
+                              STRV_MAKE("string1"),
+                              OPTION_PARSER_NORMAL);
 
         test_option_parse_one(STRV_MAKE("arg0",
                                         "-ooptarg1"),
@@ -321,7 +364,8 @@ TEST(option_parse) {
                                       { "optional1", "optarg1" },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         test_option_parse_one(STRV_MAKE("arg0",
                                         "-o", "string1"),
@@ -330,7 +374,8 @@ TEST(option_parse) {
                                       { "optional1", NULL },
                                       {}
                               },
-                              STRV_MAKE("string1"));
+                              STRV_MAKE("string1"),
+                              OPTION_PARSER_NORMAL);
 
         test_option_parse_one(STRV_MAKE("arg0",
                                         "string1",
@@ -399,7 +444,8 @@ TEST(option_parse) {
                                         "string7",
                                         "--help",
                                         "--required1",
-                                        "--optional1"));
+                                        "--optional1"),
+                              OPTION_PARSER_NORMAL);
 }
 
 TEST(option_stops_parsing) {
@@ -422,7 +468,8 @@ TEST(option_stops_parsing) {
                                       {}
                               },
                               STRV_MAKE("--help",
-                                        "foo"));
+                                        "foo"),
+                              OPTION_PARSER_NORMAL);
 
         /* Options before --exec are still parsed */
         test_option_parse_one(STRV_MAKE("arg0",
@@ -437,7 +484,8 @@ TEST(option_stops_parsing) {
                                       {}
                               },
                               STRV_MAKE("--version",
-                                        "bar"));
+                                        "bar"),
+                              OPTION_PARSER_NORMAL);
 
         /* --exec with no trailing args */
         test_option_parse_one(STRV_MAKE("arg0",
@@ -447,7 +495,8 @@ TEST(option_stops_parsing) {
                                       { "exec" },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         /* --exec after positional args */
         test_option_parse_one(STRV_MAKE("arg0",
@@ -463,7 +512,8 @@ TEST(option_stops_parsing) {
                               STRV_MAKE("pos1",
                                         "--help",
                                         "--required",
-                                        "val"));
+                                        "val"),
+                              OPTION_PARSER_NORMAL);
 
         /* "--" after --exec: "--" is still consumed as end-of-options marker. This is needed for
          * backwards compatibility, systemd-dissect implemented this behaviour. But also, it makes
@@ -478,7 +528,8 @@ TEST(option_stops_parsing) {
                                       { "exec" },
                                       {}
                               },
-                              STRV_MAKE("--help"));
+                              STRV_MAKE("--help"),
+                              OPTION_PARSER_NORMAL);
 
         /* "--" before --exec: "--" terminates first, --exec is positional */
         test_option_parse_one(STRV_MAKE("arg0",
@@ -488,7 +539,8 @@ TEST(option_stops_parsing) {
                               options,
                               NULL,
                               STRV_MAKE("--exec",
-                                        "--help"));
+                                        "--help"),
+                              OPTION_PARSER_NORMAL);
 
         /* Multiple options then --exec then more option-like args */
         test_option_parse_one(STRV_MAKE("arg0",
@@ -506,7 +558,8 @@ TEST(option_stops_parsing) {
                               },
                               STRV_MAKE("-h",
                                         "--required",
-                                        "val2"));
+                                        "val2"),
+                              OPTION_PARSER_NORMAL);
 }
 
 TEST(option_group_marker) {
@@ -530,7 +583,8 @@ TEST(option_group_marker) {
                                       { "debug" },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         /* Check that group marker name is ignored */
         test_option_parse_one(STRV_MAKE("arg0",
@@ -542,7 +596,8 @@ TEST(option_group_marker) {
                                       { "version" },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         /* Verify that the group marker is not mistaken for an option */
         test_option_invalid_one(STRV_MAKE("arg0",
@@ -569,7 +624,8 @@ TEST(option_group_marker) {
                                       { "Advance" },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         /* Partial match with multiple candidates */
         test_option_invalid_one(STRV_MAKE("arg0",
@@ -592,7 +648,8 @@ TEST(option_optional_arg) {
                                       { "output", "foo.txt" },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         /* Long option without = does NOT consume the next arg */
         test_option_parse_one(STRV_MAKE("arg0",
@@ -602,7 +659,8 @@ TEST(option_optional_arg) {
                                       { "output", NULL },
                                       {}
                               },
-                              STRV_MAKE("foo.txt"));
+                              STRV_MAKE("foo.txt"),
+                              OPTION_PARSER_NORMAL);
 
         /* Short option with inline arg */
         test_option_parse_one(STRV_MAKE("arg0",
@@ -612,7 +670,8 @@ TEST(option_optional_arg) {
                                       { "output", "foo.txt" },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         /* Short option without inline arg does NOT consume the next arg */
         test_option_parse_one(STRV_MAKE("arg0",
@@ -622,7 +681,8 @@ TEST(option_optional_arg) {
                                       { "output", NULL },
                                       {}
                               },
-                              STRV_MAKE("foo.txt"));
+                              STRV_MAKE("foo.txt"),
+                              OPTION_PARSER_NORMAL);
 
         /* Optional arg option at end of argv */
         test_option_parse_one(STRV_MAKE("arg0",
@@ -632,7 +692,8 @@ TEST(option_optional_arg) {
                                       { "output", NULL },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         /* Mixed: optional arg with other options */
         test_option_parse_one(STRV_MAKE("arg0",
@@ -646,7 +707,8 @@ TEST(option_optional_arg) {
                                       { "help" },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         /* Short combo: -ho (h then o with no arg) */
         test_option_parse_one(STRV_MAKE("arg0",
@@ -657,7 +719,8 @@ TEST(option_optional_arg) {
                                       { "output", NULL },
                                       {}
                               },
-                              STRV_MAKE("pos1"));
+                              STRV_MAKE("pos1"),
+                              OPTION_PARSER_NORMAL);
 
         /* Short combo: -hobar (h then o with inline arg "bar") */
         test_option_parse_one(STRV_MAKE("arg0",
@@ -668,7 +731,8 @@ TEST(option_optional_arg) {
                                       { "output", "bar" },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 }
 
 /* Test the OPTION, OPTION_LONG, OPTION_SHORT, OPTION_FULL, OPTION_GROUP macros
@@ -677,7 +741,8 @@ TEST(option_optional_arg) {
 static void test_macros_parse_one(
                 char **argv,
                 const Entry *entries,
-                char **remaining) {
+                char **remaining,
+                OptionParserMode mode) {
 
         _cleanup_free_ char *joined = strv_join(argv, ", ");
         log_debug("/* %s(%s) */", __func__, joined);
@@ -691,11 +756,11 @@ static void test_macros_parse_one(
         for (const Entry *e = entries; e && (e->long_code || e->short_code != 0); e++)
                 n_entries++;
 
-        OptionParser state = {};
+        OptionParser state = { argc, argv, mode };
         const Option *opt;
         const char *arg;
 
-        FOREACH_OPTION_FULL(&state, c, argc, argv, &opt, &arg, ASSERT_TRUE(false)) {
+        FOREACH_OPTION_FULL(&state, c, &opt, &arg, ASSERT_TRUE(false)) {
                 log_debug("%c %s: %s=%s",
                           opt->short_code != 0 ? opt->short_code : ' ',
                           opt->long_code ?: "",
@@ -743,6 +808,9 @@ static void test_macros_parse_one(
                 OPTION_LONG("debug", NULL, "Enable debug mode"):
                         break;
 
+                OPTION_POSITIONAL:
+                        break;
+
                 default:
                         log_error("Unexpected option id: %d", c);
                         ASSERT_TRUE(false);
@@ -751,7 +819,7 @@ static void test_macros_parse_one(
 
         ASSERT_EQ(i, n_entries);
 
-        char **args = option_parser_get_args(&state, argc, argv);
+        char **args = option_parser_get_args(&state);
         ASSERT_TRUE(strv_equal(args, remaining));
         ASSERT_STREQ(argv[0], saved_argv0);
 }
@@ -764,7 +832,8 @@ TEST(option_macros) {
                                       { "help" },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         /* OPTION: short form */
         test_macros_parse_one(STRV_MAKE("arg0",
@@ -773,7 +842,8 @@ TEST(option_macros) {
                                       { "help" },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         /* OPTION_LONG: only accessible via long form */
         test_macros_parse_one(STRV_MAKE("arg0",
@@ -782,7 +852,8 @@ TEST(option_macros) {
                                       { "version" },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         /* OPTION_SHORT: only accessible via short form */
         test_macros_parse_one(STRV_MAKE("arg0",
@@ -791,7 +862,8 @@ TEST(option_macros) {
                                       { .short_code = 'v' },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         /* OPTION with required arg: long --required=ARG */
         test_macros_parse_one(STRV_MAKE("arg0",
@@ -800,7 +872,8 @@ TEST(option_macros) {
                                       { "required", "val1" },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         /* OPTION with required arg: long --required ARG */
         test_macros_parse_one(STRV_MAKE("arg0",
@@ -809,7 +882,8 @@ TEST(option_macros) {
                                       { "required", "val1" },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         /* OPTION with required arg: short -r ARG */
         test_macros_parse_one(STRV_MAKE("arg0",
@@ -818,7 +892,8 @@ TEST(option_macros) {
                                       { "required", "val1" },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         /* OPTION with required arg: short -rARG */
         test_macros_parse_one(STRV_MAKE("arg0",
@@ -827,7 +902,8 @@ TEST(option_macros) {
                                       { "required", "val1" },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         /* OPTION_FULL with OPTION_OPTIONAL_ARG: long with = */
         test_macros_parse_one(STRV_MAKE("arg0",
@@ -836,7 +912,8 @@ TEST(option_macros) {
                                       { "optional", "val1" },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         /* OPTION_FULL with OPTION_OPTIONAL_ARG: long without = doesn't consume next */
         test_macros_parse_one(STRV_MAKE("arg0",
@@ -845,7 +922,8 @@ TEST(option_macros) {
                                       { "optional", NULL },
                                       {}
                               },
-                              STRV_MAKE("pos1"));
+                              STRV_MAKE("pos1"),
+                              OPTION_PARSER_NORMAL);
 
         /* OPTION_FULL with OPTION_OPTIONAL_ARG: short inline */
         test_macros_parse_one(STRV_MAKE("arg0",
@@ -854,7 +932,8 @@ TEST(option_macros) {
                                       { "optional", "val1" },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         /* OPTION_FULL with OPTION_OPTIONAL_ARG: short without inline */
         test_macros_parse_one(STRV_MAKE("arg0",
@@ -863,7 +942,8 @@ TEST(option_macros) {
                                       { "optional", NULL },
                                       {}
                               },
-                              STRV_MAKE("pos1"));
+                              STRV_MAKE("pos1"),
+                              OPTION_PARSER_NORMAL);
 
         /* OPTION_FULL with OPTION_STOPS_PARSING: stops further option parsing */
         test_macros_parse_one(STRV_MAKE("arg0",
@@ -875,7 +955,8 @@ TEST(option_macros) {
                                       {}
                               },
                               STRV_MAKE("--help",
-                                        "--version"));
+                                        "--version"),
+                              OPTION_PARSER_NORMAL);
 
         /* OPTION_STOPS_PARSING: options before are still parsed */
         test_macros_parse_one(STRV_MAKE("arg0",
@@ -889,7 +970,8 @@ TEST(option_macros) {
                                       {}
                               },
                               STRV_MAKE("-h",
-                                        "--debug"));
+                                        "--debug"),
+                              OPTION_PARSER_NORMAL);
 
         /* OPTION_STOPS_PARSING with "--": "--" after exec is still consumed */
         test_macros_parse_one(STRV_MAKE("arg0",
@@ -900,7 +982,8 @@ TEST(option_macros) {
                                       { "exec" },
                                       {}
                               },
-                              STRV_MAKE("--help"));
+                              STRV_MAKE("--help"),
+                              OPTION_PARSER_NORMAL);
 
         /* OPTION_STOPS_PARSING with "--": "--" before exec takes precedence */
         test_macros_parse_one(STRV_MAKE("arg0",
@@ -911,7 +994,8 @@ TEST(option_macros) {
                                       {}
                               },
                               STRV_MAKE("--exec",
-                                        "--help"));
+                                        "--help"),
+                              OPTION_PARSER_NORMAL);
 
         /* OPTION_GROUP: group marker is transparent to parsing, --debug in Advanced group works */
         test_macros_parse_one(STRV_MAKE("arg0",
@@ -920,7 +1004,8 @@ TEST(option_macros) {
                                       { "debug" },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         /* Mixed: all macro types together */
         test_macros_parse_one(STRV_MAKE("arg0",
@@ -946,7 +1031,8 @@ TEST(option_macros) {
                                       {}
                               },
                               STRV_MAKE("pos1",
-                                        "pos2"));
+                                        "pos2"),
+                              OPTION_PARSER_NORMAL);
 
         /* Short option combos with macros: -hv (help + verbose) */
         test_macros_parse_one(STRV_MAKE("arg0",
@@ -956,7 +1042,8 @@ TEST(option_macros) {
                                       { .short_code = 'v' },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         /* Short option combo with required arg: -hrval (help + required with arg "val") */
         test_macros_parse_one(STRV_MAKE("arg0",
@@ -966,7 +1053,8 @@ TEST(option_macros) {
                                       { "required", "val" },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         /* Short option combo with optional arg: -hoval (help + optional with arg "val") */
         test_macros_parse_one(STRV_MAKE("arg0",
@@ -976,7 +1064,8 @@ TEST(option_macros) {
                                       { "optional", "val" },
                                       {}
                               },
-                              NULL);
+                              NULL,
+                              OPTION_PARSER_NORMAL);
 
         /* OPTION_STOPS_PARSING then "--": "--" is still consumed after exec */
         test_macros_parse_one(STRV_MAKE("arg0",
@@ -991,7 +1080,8 @@ TEST(option_macros) {
                                       {}
                               },
                               STRV_MAKE("--version",
-                                        "-h"));
+                                        "-h"),
+                              OPTION_PARSER_NORMAL);
 
         /* OPTION_STOPS_PARSING then later "--": "--" is not consumed */
         test_macros_parse_one(STRV_MAKE("arg0",
@@ -1007,7 +1097,8 @@ TEST(option_macros) {
                               },
                               STRV_MAKE("--version",
                                         "--",
-                                        "-h"));
+                                        "-h"),
+                              OPTION_PARSER_NORMAL);
 
         /* OPTION_STOPS_PARSING then "--" twice: second "--" is not consumed */
         test_macros_parse_one(STRV_MAKE("arg0",
@@ -1024,7 +1115,180 @@ TEST(option_macros) {
                               },
                               STRV_MAKE("--",
                                         "--version",
-                                        "-h"));
+                                        "-h"),
+                              OPTION_PARSER_NORMAL);
+
+        /* Basic OPTION_POSITIONAL use */
+        test_macros_parse_one(STRV_MAKE("arg0",
+                                        "--help",
+                                        "arg1",
+                                        "--debug",
+                                        "arg2"),
+                              (Entry[]) {
+                                      { "help" },
+                                      { "(positional)", "arg1" },
+                                      { "debug" },
+                                      { "(positional)", "arg2" },
+                                      {}
+                              },
+                              NULL,
+                              OPTION_PARSER_RETURN_POSITIONAL_ARGS);
+
+        /* OPTION_POSITIONAL combined with OPTION_STOPS_PARSING */
+        test_macros_parse_one(STRV_MAKE("arg0",
+                                        "--help",
+                                        "arg1",
+                                        "--exec",
+                                        "arg2"),
+                              (Entry[]) {
+                                      { "help" },
+                                      { "(positional)", "arg1" },
+                                      { "exec" },
+                                      {}
+                              },
+                              STRV_MAKE("arg2"),
+                              OPTION_PARSER_RETURN_POSITIONAL_ARGS);
+}
+
+/* Test the pattern used by nspawn's --user: an optional-arg option that also
+ * peeks at the next arg to handle legacy "space-separated" form. */
+TEST(option_optional_arg_consume) {
+        static const Option options[] = {
+                { 1, .short_code = 'h', .long_code = "help" },
+                { 2, .long_code = "user", .metavar = "NAME", .flags = OPTION_OPTIONAL_ARG },
+                { 3, .short_code = 'u', .long_code = "uid", .metavar = "USER" },
+                {}
+        };
+
+        /* --user=NAME: optional arg provided via = */
+        test_option_parse_one(STRV_MAKE("arg0",
+                                        "--user=root"),
+                              options,
+                              (Entry[]) {
+                                      { "user", "root" },
+                                      {}
+                              },
+                              NULL,
+                              OPTION_PARSER_NORMAL);
+
+        /* --user without arg: next arg is an option, so no consumption */
+        test_option_parse_one(STRV_MAKE("arg0",
+                                        "--user",
+                                        "--help"),
+                              options,
+                              (Entry[]) {
+                                      { "user", NULL },
+                                      { "help" },
+                                      {}
+                              },
+                              NULL,
+                              OPTION_PARSER_NORMAL);
+
+        /* --user without arg: next arg is positional (doesn't start with -).
+         * The option parser returns NULL for the arg. The caller would then
+         * use option_parser_next_arg/consume_next_arg to grab it. */
+        {
+                char **argv = STRV_MAKE("arg0", "--user", "someuser", "pos1");
+                int argc = strv_length(argv);
+
+                OptionParser state = { argc, argv };
+                const Option *opt;
+                const char *arg;
+
+                ASSERT_OK_POSITIVE(option_parse(options, options + 3, &state, &opt, &arg));
+                ASSERT_STREQ(opt->long_code, "user");
+                ASSERT_NULL(arg);
+                ASSERT_STREQ(option_parser_next_arg(&state), "someuser");
+                ASSERT_STREQ(option_parser_consume_next_arg(&state), "someuser");
+
+                ASSERT_EQ(option_parse(options, options + 3, &state, &opt, &arg), 0);
+
+                ASSERT_TRUE(strv_equal(option_parser_get_args(&state), STRV_MAKE("pos1")));
+        }
+
+        /* --user at end of args: no next arg, so scope mode */
+        {
+                char **argv = STRV_MAKE("arg0", "--user");
+                int argc = strv_length(argv);
+
+                OptionParser state = { argc, argv };
+                const Option *opt;
+                const char *arg;
+
+                ASSERT_OK_POSITIVE(option_parse(options, options + 3, &state, &opt, &arg));
+                ASSERT_STREQ(opt->long_code, "user");
+                ASSERT_NULL(arg);
+                ASSERT_NULL(option_parser_next_arg(&state));
+                ASSERT_NULL(option_parser_consume_next_arg(&state));
+
+                ASSERT_EQ(option_parse(options, options + 3, &state, &opt, &arg), 0);
+
+                ASSERT_TRUE(strv_isempty(option_parser_get_args(&state)));
+        }
+
+        /* --user followed by -u (option): scope mode, -u gets its own processing */
+        {
+                char **argv = STRV_MAKE("arg0", "--user", "-u", "nobody");
+                int argc = strv_length(argv);
+
+                OptionParser state = { argc, argv };
+                const Option *opt;
+                const char *arg;
+
+                ASSERT_OK_POSITIVE(option_parse(options, options + 3, &state, &opt, &arg));
+                ASSERT_STREQ(opt->long_code, "user");
+                ASSERT_NULL(arg);
+                ASSERT_STREQ(option_parser_next_arg(&state), "-u");
+
+                ASSERT_OK_POSITIVE(option_parse(options, options + 3, &state, &opt, &arg));
+                ASSERT_STREQ(opt->long_code, "uid");
+                ASSERT_STREQ(arg, "nobody");
+                ASSERT_NULL(option_parser_next_arg(&state));
+                ASSERT_NULL(option_parser_consume_next_arg(&state));
+
+                ASSERT_EQ(option_parse(options, options + 3, &state, &opt, &arg), 0);
+
+                ASSERT_TRUE(strv_isempty(option_parser_get_args(&state)));
+        }
+
+        /* "Functional test": --user followed by -u (option): scope mode, -u gets its own processing,
+         * handled like in a real option parser. */
+        {
+                char **argv = STRV_MAKE("arg0", "--user", "-u", "nobody", "nogroup", "--user=nobody", "--user");
+                int argc = strv_length(argv);
+
+                OptionParser state = { argc, argv };
+                const Option *opt;
+                const char *arg;
+                int scope_seen = 0;
+                int nobody_seen = 0;
+
+                for (int c; (c = option_parse(options, options + 3, &state, &opt, &arg)) != 0; ) {
+                        ASSERT_OK(c);
+
+                        if (streq_ptr(opt->long_code, "user")) {
+                                if (!arg) {
+                                        const char *t = option_parser_next_arg(&state);
+                                        if (t && t[0] != '-')
+                                                arg = option_parser_consume_next_arg(&state);
+                                }
+
+                                if (arg) {
+                                        ASSERT_STREQ(arg, "nobody");
+                                        nobody_seen ++;
+                                } else
+                                        scope_seen ++;
+
+                        } else if (streq_ptr(opt->long_code, "uid")) {
+                                ASSERT_STREQ(arg, "nobody");
+                                nobody_seen ++;
+                        }
+                }
+
+                ASSERT_EQ(nobody_seen, 2);
+                ASSERT_EQ(scope_seen, 2);
+                ASSERT_TRUE(strv_equal(option_parser_get_args(&state), STRV_MAKE("nogroup")));
+        }
 }
 
 DEFINE_TEST_MAIN(LOG_DEBUG);

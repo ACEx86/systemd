@@ -130,6 +130,7 @@ simple_tests += files(
         'test-install-root.c',
         'test-io-util.c',
         'test-iovec-util.c',
+        'test-iovec-wrapper.c',
         'test-journal-importer.c',
         'test-kbd-util.c',
         'test-label.c',
@@ -347,6 +348,10 @@ executables += [
                 'dependencies' : libm,
         },
         test_template + {
+                'sources' : files('test-kexec.c'),
+                'link_with' : [libshared],
+        },
+        test_template + {
                 'sources' : files('test-libcrypt-util.c'),
                 'conditions' : ['HAVE_LIBCRYPT'],
                 'timeout' : 120,
@@ -368,7 +373,7 @@ executables += [
                 'dependencies' : libm,
         },
         test_template + {
-                'sources' : files('test-mempress.c'),
+                'sources' : files('test-pressure.c'),
                 'dependencies' : threads,
         },
         test_template + {
@@ -426,6 +431,14 @@ executables += [
         },
         test_template + {
                 'sources' : files('test-progress-bar.c'),
+        },
+        test_template + {
+                'sources' : files('test-qmp-client.c'),
+        },
+        test_template + {
+                'sources' : files('test-qmp-client-qemu.c'),
+                'objects' : ['systemd-vmspawn'],
+                'conditions' : ['ENABLE_VMSPAWN'],
         },
         test_template + {
                 'sources' : files('test-qrcode-util.c'),
@@ -492,6 +505,16 @@ executables += [
         test_template + {
                 'sources' : files('test-varlink-idl.c'),
                 'dependencies' : threads,
+        },
+        core_test_template + {
+                'sources' : files('test-varlink-idl-unit.c'),
+        },
+        core_test_template + {
+                'sources' : files('test-varlink-idl-manager.c'),
+        },
+        test_template + {
+                'sources' : files('test-varlink-idl-machine.c'),
+                'objects' : ['systemd-machined'],
         },
         test_template + {
                 'sources' : files('test-watchdog.c'),
@@ -580,7 +603,7 @@ executables += [
                 'dependencies' : common_test_dependencies,
         },
         core_test_template + {
-                'sources' : files('test-loop-block.c'),
+                'sources' : files('test-loop-util.c'),
                 'dependencies' : [threads],
                 'parallel' : false,
         },

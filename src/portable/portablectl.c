@@ -132,6 +132,8 @@ static int extract_prefix(const char *path, char **ret) {
         size_t m;
         int r;
 
+        assert(ret);
+
         r = path_extract_filename(path, &bn);
         if (r < 0)
                 return r;
@@ -1075,9 +1077,9 @@ static int verb_list_images(int argc, char *argv[], uintptr_t _data, void *userd
 
                 table_set_header(table, arg_legend);
 
-                r = table_print(table, NULL);
+                r = table_print_or_warn(table);
                 if (r < 0)
-                        return table_log_print_error(r);
+                        return r;
         }
 
         if (arg_legend) {

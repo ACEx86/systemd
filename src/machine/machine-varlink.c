@@ -142,6 +142,7 @@ int vl_method_register(sd_varlink *link, sd_json_variant *parameters, sd_varlink
                 { "vSockCid",            _SD_JSON_VARIANT_TYPE_INVALID, machine_cid,              offsetof(Machine, vsock_cid),            0                 },
                 { "sshAddress",          SD_JSON_VARIANT_STRING,        sd_json_dispatch_string,  offsetof(Machine, ssh_address),          SD_JSON_STRICT    },
                 { "sshPrivateKeyPath",   SD_JSON_VARIANT_STRING,        json_dispatch_path,       offsetof(Machine, ssh_private_key_path), 0                 },
+                { "controlAddress",      SD_JSON_VARIANT_STRING,        json_dispatch_path,       offsetof(Machine, control_address),      SD_JSON_STRICT    },
                 { "allocateUnit",        SD_JSON_VARIANT_BOOLEAN,       sd_json_dispatch_stdbool, offsetof(Machine, allocate_unit),        0                 },
                 VARLINK_DISPATCH_POLKIT_FIELD,
                 {}
@@ -192,8 +193,10 @@ int vl_method_register(sd_varlink *link, sd_json_variant *parameters, sd_varlink
         if (r < 0)
                 return r;
 
-        /* Ensure an unprivileged user cannot claim any process they don't control as their own machine */
-        if (machine->uid != 0) {
+        /* In system scope, ensure an unprivileged user cannot claim any process they don't
+         * control as their own machine. In user scope the varlink socket is already
+         * protected by $XDG_RUNTIME_DIR permissions. */
+        if (manager->runtime_scope != RUNTIME_SCOPE_USER && machine->uid != 0) {
                 r = process_is_owned_by_uid(&machine->leader, machine->uid);
                 if (r < 0)
                         return r;
@@ -358,10 +361,12 @@ int vl_method_terminate_internal(sd_varlink *link, sd_json_variant *parameters, 
         return sd_varlink_reply(link, NULL);
 }
 
+static JSON_DISPATCH_ENUM_DEFINE(dispatch_kill_whom, KillWhom, kill_whom_from_string);
+
 typedef struct MachineKillParameters {
         const char *name;
         PidRef pidref;
-        const char *swhom;
+        KillWhom whom;
         int32_t signo;
 } MachineKillParameters;
 
@@ -374,7 +379,7 @@ static void machine_kill_paramaters_done(MachineKillParameters *p) {
 int vl_method_kill(sd_varlink *link, sd_json_variant *parameters, sd_varlink_method_flags_t flags, void *userdata) {
         static const sd_json_dispatch_field dispatch_table[] = {
                 VARLINK_DISPATCH_MACHINE_LOOKUP_FIELDS(MachineKillParameters),
-                { "whom",   SD_JSON_VARIANT_STRING,         sd_json_dispatch_const_string, offsetof(MachineKillParameters, swhom), 0                 },
+                { "whom",   SD_JSON_VARIANT_STRING,         dispatch_kill_whom,            offsetof(MachineKillParameters, whom),  0                 },
                 { "signal", _SD_JSON_VARIANT_TYPE_INVALID , sd_json_dispatch_signal,       offsetof(MachineKillParameters, signo), SD_JSON_MANDATORY },
                 VARLINK_DISPATCH_POLKIT_FIELD,
                 {}
@@ -383,8 +388,8 @@ int vl_method_kill(sd_varlink *link, sd_json_variant *parameters, sd_varlink_met
         Manager *manager = ASSERT_PTR(userdata);
         _cleanup_(machine_kill_paramaters_done) MachineKillParameters p = {
                 .pidref = PIDREF_NULL,
+                .whom = _KILL_WHOM_INVALID,
         };
-        KillWhom whom;
         int r;
 
         assert(link);
@@ -401,13 +406,7 @@ int vl_method_kill(sd_varlink *link, sd_json_variant *parameters, sd_varlink_met
         if (r < 0)
                 return r;
 
-        if (isempty(p.swhom))
-                whom = KILL_ALL;
-        else {
-                whom = kill_whom_from_string(p.swhom);
-                if (whom < 0)
-                        return sd_varlink_error_invalid_parameter_name(link, "whom");
-        }
+        KillWhom whom = p.whom >= 0 ? p.whom : KILL_ALL;
 
         if (manager->runtime_scope != RUNTIME_SCOPE_USER) {
                 r = varlink_verify_polkit_async_full(

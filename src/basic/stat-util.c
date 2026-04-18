@@ -145,6 +145,9 @@ int stat_verify_symlink(const struct stat *st) {
 }
 
 int fd_verify_symlink(int fd) {
+        if (IN_SET(fd, AT_FDCWD, XAT_FDROOT))
+                return -EISDIR;
+
         return verify_stat_at(fd, /* path= */ NULL, /* follow= */ false, stat_verify_symlink, /* verify= */ true);
 }
 
@@ -154,11 +157,11 @@ int is_symlink(const char *path) {
 }
 
 static int mode_verify_socket(mode_t mode) {
-        if (S_ISLNK(mode))
-                return -ELOOP;
-
         if (S_ISDIR(mode))
                 return -EISDIR;
+
+        if (S_ISLNK(mode))
+                return -ELOOP;
 
         if (!S_ISSOCK(mode))
                 return -ENOTSOCK;
@@ -200,14 +203,51 @@ int fd_verify_linked(int fd) {
         return verify_stat_at(fd, NULL, false, stat_verify_linked, true);
 }
 
-int stat_verify_device_node(const struct stat *st) {
+int stat_verify_block(const struct stat *st) {
         assert(st);
+
+        if (S_ISDIR(st->st_mode))
+                return -EISDIR;
 
         if (S_ISLNK(st->st_mode))
                 return -ELOOP;
 
+        if (!S_ISBLK(st->st_mode))
+                return -ENOTBLK;
+
+        return 0;
+}
+
+int fd_verify_block(int fd) {
+        if (IN_SET(fd, AT_FDCWD, XAT_FDROOT))
+                return -EISDIR;
+
+        return verify_stat_at(fd, /* path= */ NULL, /* follow= */ false, stat_verify_block, /* verify= */ true);
+}
+
+int stat_verify_char(const struct stat *st) {
+        assert(st);
+
         if (S_ISDIR(st->st_mode))
                 return -EISDIR;
+
+        if (S_ISLNK(st->st_mode))
+                return -ELOOP;
+
+        if (!S_ISCHR(st->st_mode))
+                return -EBADFD;
+
+        return 0;
+}
+
+int stat_verify_device_node(const struct stat *st) {
+        assert(st);
+
+        if (S_ISDIR(st->st_mode))
+                return -EISDIR;
+
+        if (S_ISLNK(st->st_mode))
+                return -ELOOP;
 
         if (!S_ISBLK(st->st_mode) && !S_ISCHR(st->st_mode))
                 return -ENOTTY;
@@ -218,6 +258,28 @@ int stat_verify_device_node(const struct stat *st) {
 int is_device_node(const char *path) {
         assert(!isempty(path));
         return verify_stat_at(AT_FDCWD, path, false, stat_verify_device_node, false);
+}
+
+int stat_verify_regular_or_block(const struct stat *st) {
+        assert(st);
+
+        if (S_ISDIR(st->st_mode))
+                return -EISDIR;
+
+        if (S_ISLNK(st->st_mode))
+                return -ELOOP;
+
+        if (!S_ISREG(st->st_mode) && !S_ISBLK(st->st_mode))
+                return -EBADFD;
+
+        return 0;
+}
+
+int fd_verify_regular_or_block(int fd) {
+        if (IN_SET(fd, AT_FDCWD, XAT_FDROOT))
+                return -EISDIR;
+
+        return verify_stat_at(fd, /* path= */ NULL, /* follow= */ false, stat_verify_regular_or_block, /* verify= */ true);
 }
 
 int dir_is_empty_at(int dir_fd, const char *path, bool ignore_hidden_or_backup) {
@@ -835,4 +897,21 @@ mode_t inode_type_from_string(const char *s) {
                 return S_IFSOCK;
 
         return MODE_INVALID;
+}
+
+int vfs_free_bytes(int fd, uint64_t *ret) {
+        assert(fd >= 0);
+        assert(ret);
+
+        /* Safely returns the current available disk space (for root, i.e. including any space reserved for
+         * root) of the disk referenced by the fd, converted to bytes. */
+
+        struct statvfs sv;
+        if (fstatvfs(fd, &sv) < 0)
+                return -errno;
+
+        if (!MUL_SAFE(ret, (uint64_t) sv.f_frsize, (uint64_t) sv.f_bfree))
+                return -ERANGE;
+
+        return 0;
 }

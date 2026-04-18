@@ -132,6 +132,8 @@ int unit_new_for_name(Manager *m, size_t size, const char *name, Unit **ret) {
         _cleanup_(unit_freep) Unit *u = NULL;
         int r;
 
+        assert(ret);
+
         u = unit_new(m, size);
         if (!u)
                 return -ENOMEM;
@@ -178,8 +180,9 @@ static void unit_init(Unit *u) {
                 if (u->type != UNIT_SLICE)
                         cc->tasks_max = u->manager->defaults.tasks_max;
 
-                cc->memory_pressure_watch = u->manager->defaults.memory_pressure_watch;
-                cc->memory_pressure_threshold_usec = u->manager->defaults.memory_pressure_threshold_usec;
+                cc->memory_zswap_writeback = u->manager->defaults.memory_zswap_writeback;
+
+                memcpy(cc->pressure, u->manager->defaults.pressure, sizeof(cc->pressure));
         }
 
         ec = unit_get_exec_context(u);
@@ -4299,6 +4302,9 @@ static int user_from_unit_name(Unit *u, char **ret) {
 
         _cleanup_free_ char *n = NULL;
         int r;
+
+        assert(u);
+        assert(ret);
 
         r = unit_name_to_prefix(u->id, &n);
         if (r < 0)

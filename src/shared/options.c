@@ -21,16 +21,10 @@ static bool option_arg_required(const Option *opt) {
 
 static bool option_is_metadata(const Option *opt) {
         /* A metadata entry that is not a real option, like the group marker */
-        return  FLAGS_SET(ASSERT_PTR(opt)->flags, OPTION_GROUP_MARKER) ||
-                FLAGS_SET(ASSERT_PTR(opt)->flags, OPTION_HELP_ENTRY);
-}
-
-static void kill_arg(char* argv[], int argc, int index) {
-        assert(index < argc);
-        assert(!argv[argc]);
-
-        /* Eliminate argv[index] */
-        memmove(argv + index, argv + index + 1, (argc - index) * sizeof(char*));
+        return ASSERT_PTR(opt)->flags & (OPTION_GROUP_MARKER |
+                                         OPTION_POSITIONAL_ENTRY |
+                                         OPTION_HELP_ENTRY |
+                                         OPTION_HELP_ENTRY_VERBATIM);
 }
 
 static void shift_arg(char* argv[], int target, int source) {
@@ -77,21 +71,17 @@ int option_parse(
                 const Option options[],
                 const Option options_end[],
                 OptionParser *state,
-                int argc, char *argv[],
                 const Option **ret_option,
                 const char **ret_arg) {
 
-        assert(ret_arg);
-
         /* Check and initialize */
         if (state->optind == 0) {
-                if (argc < 1 || strv_isempty(argv))
+                assert(state->mode >= 0 && state->mode < _OPTION_PARSER_MODE_MAX);
+
+                if (state->argc < 1 || strv_isempty(state->argv))
                         return log_error_errno(SYNTHETIC_ERRNO(EUCLEAN), "argv cannot be empty");
 
-                *state = (OptionParser) {
-                        .optind = 1,
-                        .positional_offset = 1,
-                };
+                state->optind = state->positional_offset = 1;
         }
 
         /* Look for the next option */
@@ -100,39 +90,63 @@ int option_parse(
         const char *optname = NULL, *optval = NULL;
         _cleanup_free_ char *_optname = NULL;  /* allocated option name */
         bool separate_optval = false;
+        bool handling_positional_arg = false;
 
         if (state->short_option_offset == 0) {
-                /* Skip over non-option parameters */
+                /* Handle non-option parameters */
                 for (;;) {
-                        if (state->optind == argc)
+                        if (state->optind == state->argc)
                                 return 0;
 
-                        if (streq(argv[state->optind], "--")) {
-                                /* No more options. Eliminate "--" so that the list of positional args is clean. */
-                                kill_arg(argv, argc, state->optind);
-                                return 0;
+                        if (streq(state->argv[state->optind], "--")) {
+                                /* No more options. Move "--" before positional args so that
+                                 * the list of positional args is clean. */
+                                shift_arg(state->argv, state->positional_offset++, state->optind++);
+                                state->parsing_stopped = true;
                         }
 
                         if (state->parsing_stopped)
                                 return 0;
 
-                        if (argv[state->optind][0] == '-' &&
-                            argv[state->optind][1] != '\0')
+                        if (state->argv[state->optind][0] == '-' &&
+                            state->argv[state->optind][1] != '\0')
                                 /* Looks like we found an option parameter */
                                 break;
+
+                        if (state->mode == OPTION_PARSER_STOP_AT_FIRST_NONOPTION) {
+                                state->parsing_stopped = true;
+                                return 0;
+                        }
+
+                        if (state->mode == OPTION_PARSER_RETURN_POSITIONAL_ARGS) {
+                                handling_positional_arg = true;
+                                optval = state->argv[state->optind];
+                                break;
+                        }
 
                         state->optind++;
                 }
 
                 /* Find matching option entry.
                  * First, figure out if we have a long option or a short option. */
-                assert(argv[state->optind][0] == '-');
+                assert(handling_positional_arg || state->argv[state->optind][0] == '-');
 
-                if (argv[state->optind][1] == '-') {
+                if (handling_positional_arg)
+                        /* We are supposed to return the positional arg to be handled. */
+                        for (option = options;; option++) {
+                                /* If OPTION_PARSER_RETURN_POSITIONAL_ARGS is specified,
+                                 * OPTION_POSITIONAL must be used. */
+                                assert(option < options_end);
+
+                                if (FLAGS_SET(option->flags, OPTION_POSITIONAL_ENTRY))
+                                        break;
+                        }
+
+                else if (state->argv[state->optind][1] == '-') {
                         /* We have a long option. */
-                        char *eq = strchr(argv[state->optind], '=');
+                        char *eq = strchr(state->argv[state->optind], '=');
                         if (eq) {
-                                optname = _optname = strndup(argv[state->optind], eq - argv[state->optind]);
+                                optname = _optname = strndup(state->argv[state->optind], eq - state->argv[state->optind]);
                                 if (!_optname)
                                         return log_oom();
 
@@ -140,7 +154,7 @@ int option_parse(
                                 optval = eq + 1;
                         } else
                                 /* argument (if any) is separate */
-                                optname = argv[state->optind];
+                                optname = state->argv[state->optind];
 
                         const Option *last_partial = NULL;
                         unsigned n_partial_matches = 0;  /* The commandline option matches a defined prefix. */
@@ -179,7 +193,7 @@ int option_parse(
         }
 
         if (state->short_option_offset > 0) {
-                char optchar = argv[state->optind][state->short_option_offset];
+                char optchar = state->argv[state->optind][state->short_option_offset];
 
                 if (asprintf(&_optname, "-%c", optchar) < 0)
                         return log_oom();
@@ -194,7 +208,7 @@ int option_parse(
                         if (option_is_metadata(option) || optchar != option->short_code)
                                 continue;
 
-                        const char *rest = argv[state->optind] + state->short_option_offset + 1;
+                        const char *rest = state->argv[state->optind] + state->short_option_offset + 1;
 
                         if (option_takes_arg(option) && !isempty(rest)) {
                                 /* The rest of this parameter is the value. */
@@ -211,24 +225,30 @@ int option_parse(
 
         assert(option);
 
-        if (optval && !option_takes_arg(option))
+        if (!handling_positional_arg && optval && !option_takes_arg(option))
                 return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
                                        "%s: option '%s' doesn't allow an argument",
                                        program_invocation_short_name, optname);
-        if (!optval && option_arg_required(option)) {
-                if (!argv[state->optind + 1])
+        if (!handling_positional_arg && !optval && option_arg_required(option)) {
+                if (!state->argv[state->optind + 1])
                         return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
                                                "%s: option '%s' requires an argument",
                                                program_invocation_short_name, optname);
-                optval = argv[state->optind + 1];
+                optval = state->argv[state->optind + 1];
                 separate_optval = true;
         }
 
         if (state->short_option_offset == 0) {
-                /* We're done with this option. Adjust the array and position. */
-                shift_arg(argv, state->positional_offset++, state->optind++);
+                /* We're done with this parameter. Adjust the array and position. */
+                if (handling_positional_arg) {
+                        /* Sanity check */
+                        assert(state->positional_offset == state->optind);
+                        assert(!separate_optval);
+                }
+
+                shift_arg(state->argv, state->positional_offset++, state->optind++);
                 if (separate_optval)
-                        shift_arg(argv, state->positional_offset++, state->optind++);
+                        shift_arg(state->argv, state->positional_offset++, state->optind++);
         }
 
         if (FLAGS_SET(option->flags, OPTION_STOPS_PARSING))
@@ -237,16 +257,58 @@ int option_parse(
         if (ret_option)
                 /* Return the matched Option structure to allow the caller to "know" what was matched */
                 *ret_option = option;
-        *ret_arg = optval;
+
+        if (ret_arg)
+                *ret_arg = optval;
+        else
+                /* It's fine to omit ret_arg, but only if no options return a value. */
+                assert(!optval);
+
         return option->id;
 }
 
-char** option_parser_get_args(const OptionParser *state, int argc, char *argv[]) {
-        /* Returns positional args as a strv.
-         * If "--" was found, it has been removed. */
+char* option_parser_next_arg(const OptionParser *state) {
+        /* Peek at the next argument, whatever it is (option or position arg).
+         * May return NULL. */
 
         assert(state->optind > 0);
-        return argv + state->positional_offset;
+        assert(state->positional_offset <= state->argc);
+
+        return state->optind < state->argc ? state->argv[state->optind] : NULL;
+}
+
+char* option_parser_consume_next_arg(OptionParser *state) {
+        /* "Take" the next argument, whatever it is (option or position arg).
+         * The argument remains in the array, but the optind pointer is moved
+         * so we won't try to interpret it as an option.
+         * May return NULL. */
+
+        char *t = option_parser_next_arg(state);
+        if (t)
+                shift_arg(state->argv, state->positional_offset++, state->optind++);
+        return t;
+}
+
+char** option_parser_get_args(const OptionParser *state) {
+        /* Returns positional args as a strv.
+         * If "--" was found, it has been moved before state->positional_offset.
+         * The array is only valid, i.e. clean without any options, after parsing
+         * has naturally finished. The array that is returned is a slice of the
+         * original argv array, so it must not be freed or modified. */
+
+        assert(state->optind > 0);
+        assert(state->optind == state->argc || state->parsing_stopped);
+        assert(state->positional_offset <= state->argc);
+
+        return state->argv + state->positional_offset;
+}
+
+size_t option_parser_get_n_args(const OptionParser *state) {
+        assert(state->optind > 0);
+        assert(state->optind == state->argc || state->parsing_stopped);
+        assert(state->positional_offset <= state->argc);
+
+        return state->argc - state->positional_offset;
 }
 
 int _option_parser_get_help_table(
@@ -264,7 +326,7 @@ int _option_parser_get_help_table(
 
         bool in_group = group == NULL;  /* Are we currently in the section on the array that forms
                                          * group <group>? The first part is the default group, so
-                                         * the group was not specified, we are in. */
+                                         * if the group was not specified, we are in. */
 
         for (const Option *opt = options; opt < options_end; opt++) {
                 bool group_marker = FLAGS_SET(opt->flags, OPTION_GROUP_MARKER);
@@ -279,27 +341,38 @@ int _option_parser_get_help_table(
                         /* No help string — we do not show the option */
                         continue;
 
-                char sc[3] = "  ";
-                if (opt->short_code != 0)
-                        xsprintf(sc, "-%c", opt->short_code);
+                _cleanup_free_ char *s = NULL;
 
-                /* We indent the option string by two spaces. We could set the minimum cell width and
-                 * right-align for a similar result, but that'd be more work. This is only used for
-                 * display.
-                 *
-                 * "=" is shown only when a long option is defined: -l --long=ARG, --long=ARG, -s ARG.
-                 */
-                bool need_eq = option_takes_arg(opt) && opt->long_code;
-                _cleanup_free_ char *s = strjoin(
-                                "  ",
-                                sc,
-                                " ",
-                                opt->long_code ? "--" : "",
-                                strempty(opt->long_code),
-                                option_arg_optional(opt) ? "[" : "",
-                                need_eq ? "=" : "",
-                                strempty(opt->metavar),
-                                option_arg_optional(opt) ? "]" : "");
+                if (FLAGS_SET(opt->flags, OPTION_HELP_ENTRY_VERBATIM)) {
+                        assert(opt->long_code);
+
+                        s = strjoin("  ",
+                                    opt->long_code);
+                } else {
+                        char sc[3] = "  ";
+                        if (opt->short_code != 0)
+                                xsprintf(sc, "-%c", opt->short_code);
+
+                        /* We indent the option string by two spaces. We could set the minimum cell width and
+                         * right-align for a similar result, but that'd be more work. This is only used for
+                         * display.
+                         *
+                         * "=" is shown only when a long option is defined: -l --long=ARG, --long=ARG, -s ARG.
+                         */
+                        bool need_eq = option_takes_arg(opt) && opt->long_code;
+                        bool need_quote = opt->metavar && strchr(opt->metavar, ' ');
+                        s = strjoin("  ",
+                                    sc,
+                                    " ",
+                                    opt->long_code ? "--" : "",
+                                    strempty(opt->long_code),
+                                    option_arg_optional(opt) ? "[" : "",
+                                    need_eq ? "=" : "",
+                                    need_quote ? "'" : "",
+                                    strempty(opt->metavar),
+                                    need_quote ? "'" : "",
+                                    option_arg_optional(opt) ? "]" : "");
+                }
                 if (!s)
                         return log_oom();
 

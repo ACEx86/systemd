@@ -1499,6 +1499,17 @@ Jan 12 10:46:45 example.com bluetoothd[8900]: gatt-time-server: Input/output err
             systemd listens on behalf of user configuration will stay
             accessible.</para>
 
+            <para>When unit aliasing is introduced during reload (e.g., converting
+            <filename>b.service</filename> to a symlink pointing to
+            <filename>a.service</filename>), the running state of the canonical
+            unit (<filename>a.service</filename>) is preserved. The old serialized
+            state of the now-aliased unit is discarded to prevent stale data from
+            corrupting the canonical unit's live state. Dependencies referencing
+            the alias name are automatically resolved to the canonical unit, and
+            the dependency graph is rebuilt from unit files, ensuring consistency.
+            If the now-aliased unit had running processes, they are abandoned and
+            will no longer be tracked by the service manager.</para>
+
             <para>This command should not be confused with the
             <command>reload</command> command.</para>
           </listitem>
@@ -2781,6 +2792,21 @@ Jan 12 10:46:45 example.com bluetoothd[8900]: gatt-time-server: Input/output err
           update.</para>
 
           <xi:include href="version-info.xml" xpointer="v246"/>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><option>--kernel-cmdline=</option></term>
+
+        <listitem>
+          <para>When used with <command>kexec</command>, append the specified string to the kernel command
+          line options of the kexec kernel. The kernel command line is taken from the boot loader entry of
+          the currently booted kernel (as selected automatically when no kexec kernel is preloaded, see
+          <command>kexec</command> above). This string is appended verbatim, separated from the existing
+          options by a single space. <command>systemctl kexec</command> will fail if this option is specified
+          when a kexec kernel is already loaded.</para>
+
+          <xi:include href="version-info.xml" xpointer="v261"/>
         </listitem>
       </varlistentry>
 

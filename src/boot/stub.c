@@ -1,11 +1,13 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
 
 #include "boot-secret.h"
+#include "console.h"
 #include "cpio.h"
 #include "device-path-util.h"
 #include "devicetree.h"
 #include "efi-efivars.h"
 #include "efi-log.h"
+#include "efi-string.h"
 #include "export-vars.h"
 #include "graphics.h"
 #include "iovec-util-fundamental.h"
@@ -410,14 +412,7 @@ static void named_addon_done(NamedAddon *a) {
         iovec_done(&a->blob);
 }
 
-static void named_addon_free_many(NamedAddon *a, size_t n) {
-        assert(a || n == 0);
-
-        FOREACH_ARRAY(i, a, n)
-                named_addon_done(i);
-
-        free(a);
-}
+static DEFINE_ARRAY_FREE_FUNC(named_addon_free_array, NamedAddon, named_addon_done);
 
 static void install_addon_devicetrees(
                 struct devicetree_state *dt_state,
@@ -1292,9 +1287,9 @@ static EFI_STATUS run(EFI_HANDLE image) {
 
         /* Now that we have the UKI sections loaded, also load global first and then local (per-UKI)
          * addons. The data is loaded at once, and then used later. */
-        CLEANUP_ARRAY(dt_addons, n_dt_addons, named_addon_free_many);
-        CLEANUP_ARRAY(initrd_addons, n_initrd_addons, named_addon_free_many);
-        CLEANUP_ARRAY(ucode_addons, n_ucode_addons, named_addon_free_many);
+        CLEANUP_ARRAY(dt_addons, n_dt_addons, named_addon_free_array);
+        CLEANUP_ARRAY(initrd_addons, n_initrd_addons, named_addon_free_array);
+        CLEANUP_ARRAY(ucode_addons, n_ucode_addons, named_addon_free_array);
         load_all_addons(image, loaded_image, uname, &cmdline_addons, &dt_addons, &n_dt_addons, &initrd_addons, &n_initrd_addons, &ucode_addons, &n_ucode_addons);
 
         /* If we have any extra command line to add via PE addons, load them now and append, and measure the
@@ -1303,6 +1298,8 @@ static EFI_STATUS run(EFI_HANDLE image) {
          * image-specific ones later, for the same reason. */
         cmdline_append_and_measure_addons(cmdline_addons, &cmdline, &parameters_measured);
         cmdline_append_and_measure_smbios(&cmdline, &parameters_measured);
+
+        cmdline_append_console(&cmdline);
 
         export_common_variables(loaded_image);
         export_stub_variables(loaded_image, profile);

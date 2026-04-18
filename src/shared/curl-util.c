@@ -8,6 +8,7 @@
 #include "hashmap.h"
 #include "log.h"
 #include "string-util.h"
+#include "strv.h"
 #include "time-util.h"
 #include "version.h"
 
@@ -207,6 +208,8 @@ int curl_glue_new(CurlGlue **glue, sd_event *event) {
         _cleanup_(sd_event_unrefp) sd_event *e = NULL;
         int r;
 
+        assert(glue);
+
         if (event)
                 e = sd_event_ref(event);
         else {
@@ -291,6 +294,8 @@ int curl_glue_make(CURL **ret, const char *url, void *userdata) {
         if (curl_easy_setopt(c, CURLOPT_PROTOCOLS_STR, "HTTP,HTTPS,FILE") != CURLE_OK)
 #else
         if (curl_easy_setopt(c, CURLOPT_PROTOCOLS, CURLPROTO_HTTP|CURLPROTO_HTTPS|CURLPROTO_FILE) != CURLE_OK)
+                return -EIO;
+        if (curl_easy_setopt(c, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP|CURLPROTO_HTTPS) != CURLE_OK)
 #endif
                 return -EIO;
 
@@ -400,6 +405,22 @@ int curl_parse_http_time(const char *t, usec_t *ret) {
                 return -ERANGE;
 
         *ret = (usec_t) v * USEC_PER_SEC;
+
+        return 0;
+}
+
+int curl_append_to_header(struct curl_slist **list, char **headers) {
+        /* This function leaves 'list' modified on partial failure.
+         * Input/output param list may point to NULL. */
+
+        assert(list);
+
+        STRV_FOREACH(h, headers) {
+                struct curl_slist *l = curl_slist_append(*list, *h);
+                if (!l)
+                        return -ENOMEM;
+                *list = l;
+        }
 
         return 0;
 }

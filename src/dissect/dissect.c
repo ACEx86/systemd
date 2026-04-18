@@ -141,7 +141,7 @@ static int help(void) {
                 return r;
 
         /* Make the 1st column same width in both tables */
-        (void) table_sync_column_width(options, 0, commands, 0);
+        (void) table_sync_column_widths(0, options, commands);
 
         printf("%1$s [OPTIONS...] IMAGE\n"
                "%1$s [OPTIONS...] --mount IMAGE PATH\n"
@@ -165,11 +165,15 @@ static int help(void) {
                ansi_underline(),
                ansi_normal());
 
-        table_print(options, stdout);
+        r = table_print_or_warn(options);
+        if (r < 0)
+                return r;
 
         printf("\n%sCommands:%s\n", ansi_underline(), ansi_normal());
 
-        table_print(commands, stdout);
+        r = table_print_or_warn(commands);
+        if (r < 0)
+                return r;
 
         printf("\nSee the %s for details.\n", link);
         return 0;
@@ -185,6 +189,25 @@ static int parse_image_path_argument(const char *path, char **ret_root, char **r
         r = parse_path_argument(path, /* suppress_root= */ false, &p);
         if (r < 0)
                 return r;
+
+        /* If we got a sysfs path (e.g. from a udev-instantiated template unit's %f specifier),
+         * resolve it to the corresponding devnode. */
+        if (path_startswith(p, "/sys/")) {
+                _cleanup_(sd_device_unrefp) sd_device *dev = NULL;
+                const char *devname;
+
+                r = sd_device_new_from_syspath(&dev, p);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to get device from syspath '%s': %m", p);
+
+                r = sd_device_get_devname(dev, &devname);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to get devname for '%s': %m", p);
+
+                r = free_and_strdup(&p, devname);
+                if (r < 0)
+                        return log_oom();
+        }
 
         if (stat(p, &st) < 0)
                 return log_error_errno(errno, "Failed to stat %s: %m", p);
@@ -207,11 +230,11 @@ static int parse_argv(int argc, char *argv[]) {
         assert(argc >= 0);
         assert(argv);
 
-        OptionParser state = {};
+        OptionParser state = { argc, argv };
         const Option *current;
         const char *arg;
 
-        FOREACH_OPTION_FULL(&state, c, argc, argv, &current, &arg, /* on_error= */ return c)
+        FOREACH_OPTION_FULL(&state, c, &current, &arg, /* on_error= */ return c)
                 switch (c) {
 
                 OPTION_COMMON_NO_PAGER:
@@ -495,7 +518,7 @@ static int parse_argv(int argc, char *argv[]) {
                 arg_runtime_scope = system_scope_requested && user_scope_requested ? _RUNTIME_SCOPE_INVALID :
                         system_scope_requested ? RUNTIME_SCOPE_SYSTEM : RUNTIME_SCOPE_USER;
 
-        char **args = option_parser_get_args(&state, argc, argv);
+        char **args = option_parser_get_args(&state);
 
         switch (arg_action) {
 
@@ -1082,9 +1105,9 @@ static int action_dissect(
         if (!sd_json_format_enabled(arg_json_format_flags)) {
                 table_set_header(t, arg_legend);
 
-                r = table_print(t, NULL);
+                r = table_print_or_warn(t);
                 if (r < 0)
-                        return table_log_print_error(r);
+                        return r;
         } else {
                 _cleanup_(sd_json_variant_unrefp) sd_json_variant *jt = NULL;
 
@@ -2015,7 +2038,7 @@ static int run(int argc, char *argv[]) {
                         uint32_t loop_flags;
                         int open_flags;
 
-                        open_flags = FLAGS_SET(arg_flags, DISSECT_IMAGE_DEVICE_READ_ONLY) ? O_RDONLY : O_RDWR;
+                        open_flags = FLAGS_SET(arg_flags, DISSECT_IMAGE_DEVICE_READ_ONLY) ? O_RDONLY : -1;
                         loop_flags = FLAGS_SET(arg_flags, DISSECT_IMAGE_NO_PARTITION_TABLE) ? 0 : LO_FLAGS_PARTSCAN;
 
                         if (arg_in_memory)
@@ -2029,7 +2052,7 @@ static int run(int argc, char *argv[]) {
                                 log_debug_errno(r, "Lacking permissions or missing /dev/loop-control to set up loopback block device for %s, using service: %m", arg_image);
                                 arg_via_service = true;
                         } else {
-                                if (arg_loop_ref) {
+                                if (arg_loop_ref && !LOOP_DEVICE_IS_FOREIGN(d)) {
                                         r = loop_device_set_filename(d, arg_loop_ref);
                                         if (r < 0)
                                                 log_warning_errno(r, "Failed to set loop reference string to '%s', ignoring: %m", arg_loop_ref);

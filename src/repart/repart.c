@@ -290,6 +290,14 @@ typedef enum IntegrityAlg {
         _INTEGRITY_ALG_INVALID = -EINVAL,
 } IntegrityAlg;
 
+typedef enum EncryptKDF {
+        ENCRYPT_KDF_ARGON2ID,
+        ENCRYPT_KDF_PBKDF2,
+        ENCRYPT_KDF_MINIMAL,
+        _ENCRYPT_KDF_MAX,
+        _ENCRYPT_KDF_INVALID = -EINVAL,
+} EncryptKDF;
+
 typedef enum VerityMode {
         VERITY_OFF,
         VERITY_DATA,
@@ -472,6 +480,7 @@ typedef struct Partition {
         size_t tpm2_n_hash_pcr_values;
         IntegrityMode integrity;
         IntegrityAlg integrity_alg;
+        EncryptKDF encrypt_kdf;
         VerityMode verity;
         char *verity_match_key;
         MinimizeMode minimize;
@@ -598,6 +607,12 @@ static const char *integrity_alg_table[_INTEGRITY_ALG_MAX] = {
         [INTEGRITY_ALG_HMAC_SHA512] = "hmac-sha512",
 };
 
+static const char *encrypt_kdf_table[_ENCRYPT_KDF_MAX] = {
+        [ENCRYPT_KDF_ARGON2ID] = "argon2id",
+        [ENCRYPT_KDF_PBKDF2]   = "pbkdf2",
+        [ENCRYPT_KDF_MINIMAL]  = "minimal",
+};
+
 static const char *verity_mode_table[_VERITY_MODE_MAX] = {
         [VERITY_OFF]  = "off",
         [VERITY_DATA] = "data",
@@ -636,6 +651,7 @@ DEFINE_PRIVATE_STRING_TABLE_LOOKUP(append_mode, AppendMode);
 DEFINE_PRIVATE_STRING_TABLE_LOOKUP_FROM_STRING_WITH_BOOLEAN(encrypt_mode, EncryptMode, ENCRYPT_KEY_FILE);
 DEFINE_PRIVATE_STRING_TABLE_LOOKUP_FROM_STRING_WITH_BOOLEAN(integrity_mode, IntegrityMode, INTEGRITY_INLINE);
 DEFINE_PRIVATE_STRING_TABLE_LOOKUP(integrity_alg, IntegrityAlg);
+DEFINE_PRIVATE_STRING_TABLE_LOOKUP_FROM_STRING(encrypt_kdf, EncryptKDF);
 DEFINE_PRIVATE_STRING_TABLE_LOOKUP(verity_mode, VerityMode);
 DEFINE_PRIVATE_STRING_TABLE_LOOKUP_FROM_STRING_WITH_BOOLEAN(minimize_mode, MinimizeMode, MINIMIZE_BEST);
 DEFINE_PRIVATE_STRING_TABLE_LOOKUP_TO_STRING(progress_phase, ProgressPhase);
@@ -738,6 +754,7 @@ static Partition *partition_new(Context *c) {
                 .progress_ratelimit = { 100 * USEC_PER_MSEC, 1 },
                 .fs_sector_size = UINT64_MAX,
                 .discard = -1,
+                .encrypt_kdf = _ENCRYPT_KDF_INVALID,
         };
 
         return p;
@@ -1116,7 +1133,7 @@ static uint64_t partition_min_size(const Context *context, const Partition *p) {
          * exists the current size is what we really need. If it doesn't exist yet refuse to allocate less
          * than 4K.
          *
-         * DEFAULT_MIN_SIZE is the default SizeMin= we configure if nothing else is specified. */
+         * DEFAULT_MIN_SIZE is the default SizeMinBytes= we configure if nothing else is specified. */
 
         if (PARTITION_IS_FOREIGN(p)) {
                 /* Don't allow changing size of partitions not managed by us */
@@ -2691,6 +2708,8 @@ static int parse_key_file(const char *filename, struct iovec *key) {
         size_t n = 0;
         int r;
 
+        assert(key);
+
         r = read_full_file_full(
                         AT_FDCWD, filename,
                         /* offset= */ UINT64_MAX,
@@ -2733,6 +2752,7 @@ static int config_parse_key_file(
 
 static DEFINE_CONFIG_PARSE_ENUM_WITH_DEFAULT(config_parse_integrity, integrity_mode, IntegrityMode, INTEGRITY_OFF);
 static DEFINE_CONFIG_PARSE_ENUM_WITH_DEFAULT(config_parse_integrity_alg, integrity_alg, IntegrityAlg, INTEGRITY_ALG_HMAC_SHA256);
+static DEFINE_CONFIG_PARSE_ENUM_WITH_DEFAULT(config_parse_encrypt_kdf, encrypt_kdf, EncryptKDF, _ENCRYPT_KDF_INVALID);
 
 static DEFINE_CONFIG_PARSE_ENUM_WITH_DEFAULT(config_parse_verity, verity_mode, VerityMode, VERITY_OFF);
 static DEFINE_CONFIG_PARSE_ENUM_WITH_DEFAULT(config_parse_minimize, minimize_mode, MinimizeMode, MINIMIZE_OFF);
@@ -2835,7 +2855,7 @@ static int context_notify(
         if (c->link) {
                 r = sd_varlink_notifybo(
                                 c->link,
-                                SD_JSON_BUILD_PAIR("phase", JSON_BUILD_STRING_UNDERSCORIFY(progress_phase_to_string(phase))),
+                                JSON_BUILD_PAIR_ENUM("phase", progress_phase_to_string(phase)),
                                 JSON_BUILD_PAIR_STRING_NON_EMPTY("object", object),
                                 JSON_BUILD_PAIR_UNSIGNED_NOT_EQUAL("progress", percent, UINT_MAX));
                 if (r < 0)
@@ -2890,6 +2910,7 @@ static int partition_read_definition(
                 { "Partition", "KeyFile",                  config_parse_key_file,          0,                                  p                           },
                 { "Partition", "Integrity",                config_parse_integrity,         0,                                  &p->integrity               },
                 { "Partition", "IntegrityAlgorithm",       config_parse_integrity_alg,     0,                                  &p->integrity_alg           },
+                { "Partition", "EncryptKDF",               config_parse_encrypt_kdf,       0,                                  &p->encrypt_kdf             },
                 { "Partition", "Compression",              config_parse_string,            CONFIG_PARSE_STRING_SAFE_AND_ASCII, &p->compression             },
                 { "Partition", "CompressionLevel",         config_parse_string,            CONFIG_PARSE_STRING_SAFE_AND_ASCII, &p->compression_level       },
                 { "Partition", "SupplementFor",            config_parse_string,            0,                                  &p->supplement_for_name     },
@@ -2983,9 +3004,13 @@ static int partition_read_definition(
                 return log_syntax(NULL, LOG_ERR, path, 1, SYNTHETIC_ERRNO(EINVAL),
                                   "Minimize= can only be enabled if Format= or Verity=hash are set.");
 
-        if (p->minimize == MINIMIZE_BEST && (p->format && !fstype_is_ro(p->format)) && p->verity != VERITY_HASH)
+        if (p->minimize == MINIMIZE_BEST &&
+                p->format &&
+                !fstype_is_ro(p->format) &&
+                !streq(p->format, "btrfs") &&
+                p->verity != VERITY_HASH)
                 return log_syntax(NULL, LOG_ERR, path, 1, SYNTHETIC_ERRNO(EINVAL),
-                                  "Minimize=best can only be used with read-only filesystems or Verity=hash.");
+                                  "Minimize=best can only be used with read-only filesystems, btrfs, or Verity=hash.");
 
         if (partition_needs_populate(p) && !mkfs_supports_root_option(p->format) && geteuid() != 0)
                 return log_syntax(NULL, LOG_ERR, path, 1, SYNTHETIC_ERRNO(EPERM),
@@ -3012,10 +3037,20 @@ static int partition_read_definition(
                                   "VerityMatchKey= can only be set if Verity= is not \"%s\".",
                                   verity_mode_to_string(p->verity));
 
-        if (IN_SET(p->verity, VERITY_HASH, VERITY_SIG) && (p->copy_blocks_path || p->copy_blocks_auto || p->format || partition_needs_populate(p)))
-                return log_syntax(NULL, LOG_ERR, path, 1, SYNTHETIC_ERRNO(EINVAL),
-                                  "CopyBlocks=/CopyFiles=/Format=/MakeDirectories=/MakeSymlinks= cannot be used with Verity=%s.",
-                                  verity_mode_to_string(p->verity));
+        if (IN_SET(p->verity, VERITY_HASH, VERITY_SIG)) {
+                if (p->format || partition_needs_populate(p))
+                        return log_syntax(NULL, LOG_ERR, path, 1, SYNTHETIC_ERRNO(EINVAL),
+                                          "CopyFiles=/Format=/MakeDirectories=/MakeSymlinks= cannot be used with Verity=%s.",
+                                          verity_mode_to_string(p->verity));
+
+                /* Later we check that the same CopyBlocks= type (auto vs path) is used for the entire verity set.
+                 * So we assume that CopyBlocks=auto is going to be correct and just path based blocks might result in
+                 * a broken setup */
+                if (p->copy_blocks_path)
+                        log_syntax(NULL, LOG_DEBUG, path, 1, 0,
+                                   "CopyBlocks= with Verity=%s bypasses dm-verity hash/signature computation; repart cannot verify the resulting setup is correct.",
+                                   verity_mode_to_string(p->verity));
+        }
 
         if (p->verity != VERITY_OFF && p->encrypt != ENCRYPT_OFF)
                 return log_syntax(NULL, LOG_ERR, path, 1, SYNTHETIC_ERRNO(EINVAL),
@@ -3049,6 +3084,10 @@ static int partition_read_definition(
         if (p->encrypt == ENCRYPT_OFF && p->discard > 0)
                 log_syntax(NULL, LOG_WARNING, path, 1, 0,
                            "Discard=yes has no effect with Encrypt=off.");
+
+        if (p->encrypt == ENCRYPT_OFF && p->encrypt_kdf >= 0)
+                log_syntax(NULL, LOG_WARNING, path, 1, 0,
+                           "EncryptKDF= has no effect with Encrypt=off.");
 
         if (p->encrypt != ENCRYPT_OFF && p->integrity == INTEGRITY_INLINE && p->discard > 0)
                 return log_syntax(NULL, LOG_ERR, path, 1, SYNTHETIC_ERRNO(EINVAL),
@@ -3212,26 +3251,6 @@ static int determine_current_padding(
         return 0;
 }
 
-static int verify_regular_or_block(int fd) {
-        struct stat st;
-
-        assert(fd >= 0);
-
-        if (fstat(fd, &st) < 0)
-                return -errno;
-
-        if (S_ISDIR(st.st_mode))
-                return -EISDIR;
-
-        if (S_ISLNK(st.st_mode))
-                return -ELOOP;
-
-        if (!S_ISREG(st.st_mode) && !S_ISBLK(st.st_mode))
-                return -EBADFD;
-
-        return 0;
-}
-
 static int context_copy_from_one(Context *context, const char *src) {
         _cleanup_close_ int fd = -EBADF;
         _cleanup_(fdisk_unref_contextp) struct fdisk_context *c = NULL;
@@ -3247,9 +3266,9 @@ static int context_copy_from_one(Context *context, const char *src) {
         if (r < 0)
                 return r;
 
-        r = verify_regular_or_block(fd);
+        r = fd_verify_regular_or_block(fd);
         if (r < 0)
-                return log_error_errno(r, "%s is not a file nor a block device: %m", src);
+                return log_error_errno(r, "'%s' is not a file nor a block device: %m", src);
 
         r = fdisk_new_context_at(fd, /* path= */ NULL, /* read_only= */ true, /* sector_size= */ UINT32_MAX, &c);
         if (r < 0)
@@ -3513,6 +3532,27 @@ static int context_read_definitions(Context *context) {
 
                                 p->siblings[mode] = q;
                         }
+                }
+        }
+
+        LIST_FOREACH(partitions, p, context->partitions) {
+                if (!IN_SET(p->verity, VERITY_HASH, VERITY_SIG))
+                        continue;
+
+                /* We check all verity siblings up until our current type and ensure that if we are using CopyBlocks=
+                 * the previous ones are using the same type of CopyBlocks=. */
+                for (VerityMode mode = VERITY_DATA; mode < p->verity; mode++) {
+                        Partition *q = ASSERT_PTR(p->siblings[mode]);
+
+                        if (p->copy_blocks_auto && !q->copy_blocks_auto)
+                                return log_syntax(NULL, LOG_ERR, p->definition_path, 1, SYNTHETIC_ERRNO(EINVAL),
+                                                  "CopyBlocks=auto set with Verity=%s but Verity=%s partition does not set CopyBlocks=auto.",
+                                                  verity_mode_to_string(p->verity), verity_mode_to_string(mode));
+
+                        if (p->copy_blocks_path && !q->copy_blocks_path)
+                                return log_syntax(NULL, LOG_ERR, p->definition_path, 1, SYNTHETIC_ERRNO(EINVAL),
+                                                  "CopyBlocks= set with Verity=%s but Verity=%s partition does not set CopyBlocks=.",
+                                                  verity_mode_to_string(p->verity), verity_mode_to_string(mode));
                 }
         }
 
@@ -4347,6 +4387,8 @@ static int partition_hint(const Partition *p, const char *node, char **ret) {
         _cleanup_free_ char *buf = NULL;
         const char *label;
         sd_id128_t id;
+
+        assert(ret);
 
         /* Tries really hard to find a suitable description for this partition */
 
@@ -5247,6 +5289,30 @@ static int partition_encrypt(Context *context, Partition *p, PartitionTarget *ta
         if (r < 0)
                 return log_error_errno(r, "Failed to LUKS2 format future partition: %m");
 
+        /* If an explicit KDF is configured, apply it before adding any keyslots. */
+        if (p->encrypt_kdf >= 0) {
+                if (p->encrypt_kdf == ENCRYPT_KDF_MINIMAL) {
+                        /* Minimal PBKDF2 with sha512, 1000 iterations, no benchmarking — appropriate
+                         * for high-entropy keys where the KDF only satisfies the LUKS2 format requirement
+                         * (e.g. kdump with crashkernel=512MB). */
+                        r = cryptsetup_set_minimal_pbkdf(cd);
+                } else {
+                        /* For argon2id or pbkdf2, set the type and let libcryptsetup benchmark
+                         * and determine the parameters. */
+                        static const struct crypt_pbkdf_type argon2id_pbkdf = {
+                                .type = "argon2id",
+                        };
+                        static const struct crypt_pbkdf_type pbkdf2_pbkdf = {
+                                .type = "pbkdf2",
+                        };
+
+                        r = sym_crypt_set_pbkdf_type(cd, p->encrypt_kdf == ENCRYPT_KDF_ARGON2ID ?
+                                                     &argon2id_pbkdf : &pbkdf2_pbkdf);
+                }
+                if (r < 0)
+                        return log_error_errno(r, "Failed to set KDF type: %m");
+        }
+
         bool allow_discards = p->integrity != INTEGRITY_INLINE && (arg_discard ? p->discard != 0 : p->discard > 0);
         if (allow_discards) {
                 uint32_t flags;
@@ -5658,7 +5724,7 @@ static int partition_format_verity_hash(
         if (PARTITION_EXISTS(p)) /* Never format existing partitions */
                 return 0;
 
-        /* Minimized partitions will use the copy blocks logic so skip those here. */
+        /* Either we are minimizing the partition or we were instructed to copy an existing hash block directly. */
         if (p->copy_blocks_fd >= 0)
                 return 0;
 
@@ -5795,21 +5861,41 @@ static int sign_verity_roothash(
 #endif
 }
 
-static const VeritySettings *lookup_verity_settings_by_uuid_pair(sd_id128_t data_uuid, sd_id128_t hash_uuid) {
-        uint8_t root_hash_key[sizeof(sd_id128_t) * 2];
+static int iovec_roothash_from_uuid_pair(
+                sd_id128_t data_uuid,
+                sd_id128_t hash_uuid,
+                struct iovec *ret_roothash) {
+
+        uint8_t roothash_bytes[sizeof(sd_id128_t) * 2];
+
+        assert(ret_roothash);
 
         if (sd_id128_is_null(data_uuid) || sd_id128_is_null(hash_uuid))
-                return NULL;
+                return -EINVAL;
 
         /* As per the https://uapi-group.org/specifications/specs/discoverable_partitions_specification/ the
          * UUIDs of the data and verity partitions are respectively the first and second halves of the
          * dm-verity roothash, so we can use them to match the signature to the right partition. */
 
-        memcpy(root_hash_key, data_uuid.bytes, sizeof(sd_id128_t));
-        memcpy(root_hash_key + sizeof(sd_id128_t), hash_uuid.bytes, sizeof(sd_id128_t));
+        memcpy(roothash_bytes, data_uuid.bytes, sizeof(sd_id128_t));
+        memcpy(roothash_bytes + sizeof(sd_id128_t), hash_uuid.bytes, sizeof(sd_id128_t));
+
+        if (!iovec_memdup(&IOVEC_MAKE(roothash_bytes, sizeof(roothash_bytes)), ret_roothash))
+                return -ENOMEM;
+
+        return 0;
+}
+
+static const VeritySettings *lookup_verity_settings_by_uuid_pair(sd_id128_t data_uuid, sd_id128_t hash_uuid) {
+        _cleanup_(iovec_done) struct iovec roothash = {};
+        int r;
+
+        r = iovec_roothash_from_uuid_pair(data_uuid, hash_uuid, &roothash);
+        if (r < 0)
+                return NULL;
 
         VeritySettings key = {
-                .root_hash = IOVEC_MAKE(root_hash_key, sizeof(root_hash_key)),
+                .root_hash = roothash,
         };
 
         return set_get(arg_verity_settings, &key);
@@ -5832,10 +5918,22 @@ static int partition_format_verity_sig(Context *context, Partition *p) {
         if (PARTITION_EXISTS(p))
                 return 0;
 
+        /* We were instructed to copy an existing signature block directly */
+        if (p->copy_blocks_fd >= 0)
+                return 0;
+
         assert_se(hp = p->siblings[VERITY_HASH]);
         assert(!hp->dropped);
         assert_se(rp = p->siblings[VERITY_DATA]);
         assert(!rp->dropped);
+
+        /* Currently only set while formatting the hash partition. But if this is skipped via CopyBlocks=
+         * we just derive the roothash from the UUIDs from the data + hash partition. */
+        if (!iovec_is_set(&hp->roothash)) {
+                r = iovec_roothash_from_uuid_pair(rp->new_uuid, hp->new_uuid, &hp->roothash);
+                if (r < 0)
+                        return log_error_errno(r, "Unable to derive roothash: %m");
+        }
 
         verity_settings = lookup_verity_settings_by_uuid_pair(rp->current_uuid, hp->current_uuid);
 
@@ -6951,6 +7049,9 @@ static int finalize_extra_mkfs_options(const Partition *p, const char *root, cha
                         if (r < 0)
                                 return r;
                 }
+
+                if (p->minimize != MINIMIZE_OFF && strv_extend(&sv, "--shrink") < 0)
+                        return log_oom();
         }
 
         *ret = TAKE_PTR(sv);
@@ -7671,6 +7772,8 @@ static int write_primary_descriptor(
                 const char *publisher_id) {
         int r;
 
+        assert(fd >= 0);
+
         struct iso9660_primary_volume_descriptor desc = {
                 .header = {
                         .type = 1,
@@ -7699,43 +7802,43 @@ static int write_primary_descriptor(
                 }
         };
 
-        set_iso9660_const_string(desc.header.identifier, sizeof(desc.header.identifier), "CD001", /* allow_a_chars= */ true);
+        iso9660_set_const_string(desc.header.identifier, sizeof(desc.header.identifier), "CD001", /* allow_a_chars= */ true);
 
-        r = time_to_iso9660_dir_datetime(usec, utc, &desc.root_directory_entry.time);
+        r = iso9660_dir_datetime_from_usec(usec, utc, &desc.root_directory_entry.time);
         if (r < 0)
                 return r;
 
-        r = set_iso9660_string(desc.system_identifier, sizeof(desc.system_identifier), system_id, /* allow_a_chars= */ true);
+        r = iso9660_set_string(desc.system_identifier, sizeof(desc.system_identifier), system_id, /* allow_a_chars= */ true);
         if (r < 0)
                 return r;
 
         /* In theory the volume identifier should be d-chars, but in practice, a-chars are allowed */
-        r = set_iso9660_string(desc.volume_identifier, sizeof(desc.volume_identifier), volume_id, /* allow_a_chars= */ true);
+        r = iso9660_set_string(desc.volume_identifier, sizeof(desc.volume_identifier), volume_id, /* allow_a_chars= */ true);
         if (r < 0)
                 return r;
 
-        set_iso9660_const_string(desc.volume_set_identifier, sizeof(desc.volume_set_identifier), NULL, /* allow_a_chars= */ false);
+        iso9660_set_const_string(desc.volume_set_identifier, sizeof(desc.volume_set_identifier), NULL, /* allow_a_chars= */ false);
 
-        r = set_iso9660_string(desc.publisher_identifier, sizeof(desc.publisher_identifier), publisher_id, /* allow_a_chars= */ true);
+        r = iso9660_set_string(desc.publisher_identifier, sizeof(desc.publisher_identifier), publisher_id, /* allow_a_chars= */ true);
         if (r < 0)
                 return r;
 
-        set_iso9660_const_string(desc.data_preparer_identifier, sizeof(desc.data_preparer_identifier), NULL, /* allow_a_chars= */ true);
-        set_iso9660_const_string(desc.application_identifier, sizeof(desc.application_identifier), "SYSTEMD-REPART", /* allow_a_chars= */ true);
-        set_iso9660_const_string(desc.copyright_file_identifier, sizeof(desc.copyright_file_identifier), NULL, /* allow_a_chars= */ false);
-        set_iso9660_const_string(desc.abstract_file_identifier, sizeof(desc.abstract_file_identifier), NULL, /* allow_a_chars= */ false);
-        set_iso9660_const_string(desc.bibliographic_file_identifier, sizeof(desc.bibliographic_file_identifier), NULL, /* allow_a_chars= */ false);
+        iso9660_set_const_string(desc.data_preparer_identifier, sizeof(desc.data_preparer_identifier), NULL, /* allow_a_chars= */ true);
+        iso9660_set_const_string(desc.application_identifier, sizeof(desc.application_identifier), "SYSTEMD-REPART", /* allow_a_chars= */ true);
+        iso9660_set_const_string(desc.copyright_file_identifier, sizeof(desc.copyright_file_identifier), NULL, /* allow_a_chars= */ false);
+        iso9660_set_const_string(desc.abstract_file_identifier, sizeof(desc.abstract_file_identifier), NULL, /* allow_a_chars= */ false);
+        iso9660_set_const_string(desc.bibliographic_file_identifier, sizeof(desc.bibliographic_file_identifier), NULL, /* allow_a_chars= */ false);
 
-        r = time_to_iso9660_datetime(usec, utc, &desc.volume_creation_date);
+        r = iso9660_datetime_from_usec(usec, utc, &desc.volume_creation_date);
         if (r < 0)
                 return r;
 
-        r = time_to_iso9660_datetime(usec, utc, &desc.volume_modification_date);
+        r = iso9660_datetime_from_usec(usec, utc, &desc.volume_modification_date);
         if (r < 0)
                 return r;
 
-        no_iso9660_datetime(&desc.volume_expiration_date);
-        no_iso9660_datetime(&desc.volume_effective_date);
+        iso9660_datetime_zero(&desc.volume_expiration_date);
+        iso9660_datetime_zero(&desc.volume_effective_date);
 
         ssize_t s = pwrite(fd, &desc, sizeof(desc), ISO9660_PRIMARY_DESCRIPTOR*ISO9660_BLOCK_SIZE);
         if (s < 0)
@@ -7747,6 +7850,8 @@ static int write_primary_descriptor(
 }
 
 static int write_eltorito_descriptor(int fd, uint32_t catalog_sector) {
+        assert(fd >= 0);
+
         struct iso9660_eltorito_descriptor desc = {
                 .header = {
                         .type = 0,
@@ -7755,7 +7860,7 @@ static int write_eltorito_descriptor(int fd, uint32_t catalog_sector) {
                 .boot_catalog_sector = htole32(catalog_sector),
         };
 
-        set_iso9660_const_string(desc.header.identifier, sizeof(desc.header.identifier), "CD001", /* allow_a_chars= */ true);
+        iso9660_set_const_string(desc.header.identifier, sizeof(desc.header.identifier), "CD001", /* allow_a_chars= */ true);
 
         strncpy(desc.boot_system_identifier, "EL TORITO SPECIFICATION", sizeof(desc.boot_system_identifier));
 
@@ -7769,6 +7874,8 @@ static int write_eltorito_descriptor(int fd, uint32_t catalog_sector) {
 }
 
 static int write_terminal_descriptor(int fd) {
+        assert(fd >= 0);
+
         struct iso9660_terminal_descriptor desc = {
                 .header = {
                         .type = 255,
@@ -7776,7 +7883,7 @@ static int write_terminal_descriptor(int fd) {
                 },
         };
 
-        set_iso9660_const_string(desc.header.identifier, sizeof(desc.header.identifier), "CD001", /* allow_a_chars= */ true);
+        iso9660_set_const_string(desc.header.identifier, sizeof(desc.header.identifier), "CD001", /* allow_a_chars= */ true);
 
         ssize_t s = pwrite(fd, &desc, sizeof(desc), ISO9660_TERMINAL_DESCRIPTOR*ISO9660_BLOCK_SIZE);
         if (s < 0)
@@ -7788,6 +7895,7 @@ static int write_terminal_descriptor(int fd) {
 }
 
 static uint16_t calculate_validation_entry_checksum(const void *p, size_t size) {
+        assert(p || size == 0);
         assert(size % 2 == 0);
 
         uint16_t checksum = 0;
@@ -7799,6 +7907,8 @@ static uint16_t calculate_validation_entry_checksum(const void *p, size_t size) 
 }
 
 static int write_boot_catalog(int fd, uint32_t load_block) {
+        assert(fd >= 0);
+
         struct el_torito_validation_entry ve = {
                 .header_indicator = 1,
                 .platform = 0xef, /* EFI */
@@ -7841,8 +7951,15 @@ static int write_boot_catalog(int fd, uint32_t load_block) {
         return 0;
 }
 
-static int write_directories(int fd, usec_t usec, bool utc, uint32_t root_sector) {
+static int write_directories(
+                int fd,
+                usec_t usec,
+                bool utc,
+                uint32_t root_sector) {
+
         int r;
+
+        assert(fd >= 0);
 
         uint32_t dir_size = 2*sizeof(struct iso9660_directory_entry); /* 2 entries with ident size 1: . and .. */
 
@@ -7859,7 +7976,7 @@ static int write_directories(int fd, usec_t usec, bool utc, uint32_t root_sector
                 .ident[0] = 0, /* special value for self */
         };
 
-        r = time_to_iso9660_dir_datetime(usec, utc, &self.time);
+        r = iso9660_dir_datetime_from_usec(usec, utc, &self.time);
         if (r < 0)
                 return r;
 
@@ -7878,7 +7995,7 @@ static int write_directories(int fd, usec_t usec, bool utc, uint32_t root_sector
 
         // TODO: we should probably add some text file explaining there is no content through ISO9660
 
-        r = time_to_iso9660_dir_datetime(usec, utc, &parent.time);
+        r = iso9660_dir_datetime_from_usec(usec, utc, &parent.time);
         if (r < 0)
                 return r;
 
@@ -7897,8 +8014,18 @@ static int write_directories(int fd, usec_t usec, bool utc, uint32_t root_sector
         return 0;
 }
 
-static int write_eltorito(int fd, usec_t usec, bool utc, uint32_t load_block, const char *system_id, const char *volume_id, const char *publisher_id) {
+static int write_eltorito(
+                int fd,
+                usec_t usec,
+                bool utc,
+                uint32_t load_block, /* in iso9660 blocks */
+                const char *system_id,
+                const char *volume_id,
+                const char *publisher_id) {
+
         int r;
+
+        assert(fd >= 0);
 
         r = write_primary_descriptor(fd, ISO9660_ROOT_DIRECTORY, usec, utc, system_id, volume_id, publisher_id);
         if (r < 0)
@@ -7924,7 +8051,7 @@ static int write_eltorito(int fd, usec_t usec, bool utc, uint32_t load_block, co
 }
 
 static int context_verify_eltorito_overlap(Context *context) {
-        /* before writing the partition table, we check if we have collision with ISO9660 */
+        /* Check if the partition table collides with the ISO9660 El Torito area. */
         assert(context);
 
         if (!arg_eltorito)
@@ -8042,10 +8169,6 @@ static int context_write_partition_table(Context *context) {
 
         (void) context_notify(context, PROGRESS_WRITING_TABLE, /* object= */ NULL, UINT_MAX);
 
-        r = context_verify_eltorito_overlap(context);
-        if (r < 0)
-                return r;
-
         r = fdisk_write_disklabel(context->fdisk_context);
         if (r < 0)
                 return log_error_errno(r, "Failed to write partition table: %m");
@@ -8065,25 +8188,39 @@ static int context_write_partition_table(Context *context) {
         } else
                 log_notice("Not telling kernel to reread partition table, because selected image does not support kernel partition block devices.");
 
-        if (arg_eltorito) {
-                bool utc = true;
-                usec_t usec = parse_source_date_epoch();
-                if (usec == USEC_INFINITY) {
-                        usec = now(CLOCK_REALTIME);
-                        utc = false;
-                }
+        log_info("Partition table written.");
 
-                uint64_t esp_offset;
-                r = context_find_esp_offset(context, &esp_offset);
-                if (r < 0)
-                        return r;
+        return 0;
+}
 
-                r = write_eltorito(fdisk_get_devfd(context->fdisk_context), usec, utc, esp_offset / ISO9660_BLOCK_SIZE, arg_eltorito_system, arg_eltorito_volume, arg_eltorito_publisher);
-                if (r < 0)
-                        return log_error_errno(r, "Failed to write El Torito boot catalog: %m");
+static int context_write_eltorito(Context *context) {
+        int r;
+
+        assert(context);
+
+        if (!arg_eltorito)
+                return 0;
+
+        if (context->dry_run)
+                return 0;
+
+        bool utc = true;
+        usec_t usec = parse_source_date_epoch();
+        if (usec == USEC_INFINITY) {
+                usec = now(CLOCK_REALTIME);
+                utc = false;
         }
 
-        log_info("All done.");
+        uint64_t esp_offset;
+        r = context_find_esp_offset(context, &esp_offset);
+        if (r < 0)
+                return r;
+
+        log_info("Writing El Torito boot catalog.");
+
+        r = write_eltorito(fdisk_get_devfd(context->fdisk_context), usec, utc, esp_offset / ISO9660_BLOCK_SIZE, arg_eltorito_system, arg_eltorito_volume, arg_eltorito_publisher);
+        if (r < 0)
+                return log_error_errno(r, "Failed to write El Torito boot catalog: %m");
 
         return 0;
 }
@@ -9046,6 +9183,8 @@ static int context_minimize(Context *context) {
                 if (!p->format)
                         continue;
 
+                bool is_btrfs = streq(p->format, "btrfs");
+
                 if (p->copy_blocks_fd >= 0)
                         continue;
 
@@ -9061,7 +9200,7 @@ static int context_minimize(Context *context) {
 
                 (void) partition_hint(p, context->node, &hint);
 
-                log_info("Pre-populating %s filesystem of partition %s twice to calculate minimal partition size",
+                log_info("Pre-populating %s filesystem of partition %s to calculate minimal partition size",
                          p->format, strna(hint));
 
                 if (!vt) {
@@ -9083,7 +9222,9 @@ static int context_minimize(Context *context) {
                 if (fd < 0)
                         return log_error_errno(errno, "Failed to open temporary file %s: %m", temp);
 
-                if (fstype_is_ro(p->format))
+                if (fstype_is_ro(p->format) || is_btrfs)
+                        /* Read-only filesystems and btrfs (with mkfs.btrfs --shrink) produce a minimal
+                         * filesystem in one pass, so we can use the real UUID directly. */
                         fs_uuid = p->fs_uuid;
                 else {
                         /* This may seem huge but it will be created sparse so it doesn't take up any space
@@ -9105,7 +9246,7 @@ static int context_minimize(Context *context) {
                                 return r;
                 }
 
-                if (!d || fstype_is_ro(p->format) || (streq_ptr(p->format, "btrfs") && p->compression)) {
+                if (!d || fstype_is_ro(p->format)) {
                         if (!mkfs_supports_root_option(p->format))
                                 return log_error_errno(SYNTHETIC_ERRNO(ENODEV),
                                                        "Loop device access is required to populate %s filesystems.",
@@ -9135,8 +9276,9 @@ static int context_minimize(Context *context) {
                         return r;
 
                 /* Read-only filesystems are minimal from the first try because they create and size the
-                 * loopback file for us. */
-                if (fstype_is_ro(p->format)) {
+                 * loopback file for us. Similarly, mkfs.btrfs --shrink populates the filesystem from the
+                 * root directory and then shrinks the backing file to the minimal size. */
+                if (fstype_is_ro(p->format) || is_btrfs) {
                         fd = safe_close(fd);
 
                         fd = open(temp, O_RDONLY|O_CLOEXEC|O_NONBLOCK);
@@ -9171,10 +9313,8 @@ static int context_minimize(Context *context) {
 
                 /* Other filesystems need to be provided with a pre-sized loopback file and will adapt to
                  * fully occupy it. Because we gave the filesystem a 1T sparse file, we need to shrink the
-                 * filesystem down to a reasonable size again to fit it in the disk image. While there are
-                 * some filesystems that support shrinking, it doesn't always work properly (e.g. shrinking
-                 * btrfs gives us a 2.0G filesystem regardless of what we put in it). Instead, let's populate
-                 * the filesystem again, but this time, instead of providing the filesystem with a 1T sparse
+                 * filesystem down to a reasonable size again to fit it in the disk image. Let's populate the
+                 * filesystem again, but this time, instead of providing the filesystem with a 1T sparse
                  * loopback file, let's size the loopback file based on the actual data used by the
                  * filesystem in the sparse file after the first attempt. This should be a good guess of the
                  * minimal amount of space needed in the filesystem to fit all the required data.
@@ -9257,6 +9397,9 @@ static int context_minimize(Context *context) {
                         continue;
 
                 if (PARTITION_EXISTS(p)) /* Never format existing partitions */
+                        continue;
+
+                if (p->copy_blocks_fd >= 0)
                         continue;
 
                 if (p->minimize == MINIMIZE_OFF)
@@ -10963,6 +11106,10 @@ static int vl_method_run(
                                 SD_JSON_BUILD_PAIR_UNSIGNED("minimalSizeBytes", minimal_size));
         }
 
+        r = context_verify_eltorito_overlap(context);
+        if (r < 0)
+                return r;
+
         r = context_ponder(context);
         if (r == -ENOSPC) {
                 uint64_t current_size, foreign_size, minimal_size;
@@ -11008,6 +11155,10 @@ static int vl_method_run(
         }
 
         r = context_write_partition_table(context);
+        if (r < 0)
+                return r;
+
+        r = context_write_eltorito(context);
         if (r < 0)
                 return r;
 
@@ -11277,6 +11428,10 @@ static int run(int argc, char *argv[]) {
                         return r;
         }
 
+        r = context_verify_eltorito_overlap(context);
+        if (r < 0)
+                return r;
+
         r = context_ponder(context);
         if (r == -ENOSPC) {
                 /* When we hit space issues, tell the user the minimal size. */
@@ -11289,6 +11444,10 @@ static int run(int argc, char *argv[]) {
         (void) context_dump(context, /* late= */ false);
 
         r = context_write_partition_table(context);
+        if (r < 0)
+                return r;
+
+        r = context_write_eltorito(context);
         if (r < 0)
                 return r;
 

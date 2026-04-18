@@ -549,6 +549,15 @@ foreach attr : possible_c_attributes
         conf.set10('HAVE_ATTRIBUTE_' + attr.to_upper(), have)
 endforeach
 
+# TODO: drop this manual check when meson learns about this attribute
+possible_c_attributes += ['no_reorder']
+
+have = cc.compiles(
+        '__attribute__((__no_reorder__)) int x;',
+        args : '-Werror=attributes',
+        name : '__attribute__((__no_reorder__))')
+conf.set10('HAVE_ATTRIBUTE_NO_REORDER', have)
+
 #####################################################################
 # compilation result tests
 
@@ -596,6 +605,7 @@ foreach ident : [
         ['fchmodat2',         '''#include <sys/stat.h>'''],     # no known header declares fchmodat2
         ['bpf',               '''#include <sys/syscall.h>'''],  # no known header declares bpf
         ['kcmp',              '''#include <sys/syscall.h>'''],  # no known header declares kcmp
+        ['kexec_file_load',   '''#include <sys/syscall.h>'''],  # no known header declares kexec_file_load
         ['keyctl',            '''#include <sys/syscall.h>'''],  # no known header declares keyctl
         ['add_key',           '''#include <sys/syscall.h>'''],  # no known header declares add_key
         ['request_key',       '''#include <sys/syscall.h>'''],  # no known header declares request_key
@@ -1364,6 +1374,7 @@ conf.set10('HAVE_DWFL_SET_SYSROOT',
 libz = dependency('zlib',
                   required : get_option('zlib'))
 conf.set10('HAVE_ZLIB', libz.found())
+libz_cflags = libz.partial_dependency(includes: true, compile_args: true)
 
 feature = get_option('bzip2')
 libbzip2 = dependency('bzip2',
@@ -1373,6 +1384,7 @@ if not libbzip2.found()
         libbzip2 = cc.find_library('bz2', required : feature)
 endif
 conf.set10('HAVE_BZIP2', libbzip2.found())
+libbzip2_cflags = libbzip2.partial_dependency(includes: true, compile_args: true)
 
 libxz = dependency('liblzma',
                    required : get_option('xz'))
@@ -2885,7 +2897,13 @@ if git.found()
                      'ls-files', ':/*.[ch]', ':/*.cc',
                 check : false)
         if all_files.returncode() == 0
-                all_files = files(all_files.stdout().split())
+                existing_files = []
+                foreach f : all_files.stdout().split()
+                        if fs.exists(f)
+                                existing_files += f
+                        endif
+                endforeach
+                all_files = files(existing_files)
 
                 custom_target(
                         output : 'tags',
@@ -2974,12 +2992,7 @@ endif
 
 spatch = find_program('spatch', required : false)
 if spatch.found()
-        # Directories excluded from coccinelle checks until their warnings are fixed.
-        # Remove directories from this list as they are cleaned up.
         coccinelle_exclude = [
-                'src/basic/',
-                'src/libsystemd/',
-                'src/shared/',
                 # libc/ has no assert() or systemd-headers so leave it
                 'src/libc/',
                 # test/ has some deliberate wonky pointers, just leave excluded
@@ -2994,7 +3007,7 @@ if spatch.found()
         foreach dir : coccinelle_src_dirs
                 if dir not in coccinelle_exclude
                         test(
-                                'coccinelle-@0@'.format(fs.name(dir)),
+                                'coccinelle-@0@'.format(fs.name(dir.strip('/'))),
                                 check_coccinelle_sh,
                                 args : [meson.project_source_root() / dir,
                                         meson.project_source_root() / 'coccinelle'],

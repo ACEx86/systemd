@@ -33,20 +33,65 @@
 #  define ARCHITECTURE_SUPPORTS_HPET 0
 #endif
 
+#if defined(__x86_64__) || defined(__aarch64__)
+#  define ARCHITECTURE_SUPPORTS_CXL 1
+#else
+#  define ARCHITECTURE_SUPPORTS_CXL 0
+#endif
+
+#if defined(__x86_64__) || defined(__i386__) || defined(__arm__) || defined(__aarch64__) || defined(__riscv) || defined(__loongarch64)
+#  define ARCHITECTURE_SUPPORTS_FW_CFG 1
+#else
+#  define ARCHITECTURE_SUPPORTS_FW_CFG 0
+#endif
+
+/* QEMU's fw_cfg file path buffer is FW_CFG_MAX_FILE_PATH (56) bytes including NUL */
+#define QEMU_FW_CFG_MAX_KEY_LEN 55
+
+/* These match the kernel's COMMAND_LINE_SIZE for each architecture */
+#if defined(__loongarch64)
+#  define KERNEL_CMDLINE_SIZE 4096
+#elif defined(__x86_64__) || defined(__i386__) || defined(__aarch64__)
+#  define KERNEL_CMDLINE_SIZE 2048
+#elif defined(__arm__) || defined(__riscv)
+#  define KERNEL_CMDLINE_SIZE 1024
+#else
+#  define KERNEL_CMDLINE_SIZE 512
+#endif
+
+/* ARCHITECTURE_NEEDS_PCIE_ROOT_PORTS is co-located with QEMU_MACHINE_TYPE so they stay in
+ * sync: q35 and virt machine types need pcie-root-port bridges for QMP device_add hotplug.
+ * Exception: m68k's "virt" uses virtio-mmio, not PCIe, so it doesn't need root ports. */
 #if defined(__x86_64__) || defined(__i386__)
 #  define QEMU_MACHINE_TYPE "q35"
-#elif defined(__arm__) || defined(__aarch64__) || defined(__riscv) || defined(__loongarch64) || defined(__m68k__)
+#  define ARCHITECTURE_NEEDS_PCIE_ROOT_PORTS 1
+#elif defined(__m68k__)
 #  define QEMU_MACHINE_TYPE "virt"
+#  define ARCHITECTURE_NEEDS_PCIE_ROOT_PORTS 0
+#elif defined(__arm__) || defined(__aarch64__) || defined(__riscv) || defined(__loongarch64)
+#  define QEMU_MACHINE_TYPE "virt"
+#  define ARCHITECTURE_NEEDS_PCIE_ROOT_PORTS 1
 #elif defined(__s390__) || defined(__s390x__)
 #  define QEMU_MACHINE_TYPE "s390-ccw-virtio"
+#  define ARCHITECTURE_NEEDS_PCIE_ROOT_PORTS 0
 #elif defined(__powerpc__) || defined(__powerpc64__)
 #  define QEMU_MACHINE_TYPE "pseries"
+#  define ARCHITECTURE_NEEDS_PCIE_ROOT_PORTS 0
 #elif defined(__mips__)
 #  define QEMU_MACHINE_TYPE "malta"
+#  define ARCHITECTURE_NEEDS_PCIE_ROOT_PORTS 0
 #elif defined(__sparc__)
 #  define QEMU_MACHINE_TYPE "sun4u"
+#  define ARCHITECTURE_NEEDS_PCIE_ROOT_PORTS 0
 #else
 #  define QEMU_MACHINE_TYPE "none"
+#  define ARCHITECTURE_NEEDS_PCIE_ROOT_PORTS 0
+#endif
+
+#if defined(__arm__) || defined(__aarch64__)
+#  define QEMU_SERIAL_CONSOLE_NAME "ttyAMA0"
+#else
+#  define QEMU_SERIAL_CONSOLE_NAME "ttyS0"
 #endif
 
 typedef struct OvmfConfig {

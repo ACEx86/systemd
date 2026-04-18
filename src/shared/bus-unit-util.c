@@ -1175,6 +1175,8 @@ static int bus_append_import_credential(sd_bus_message *m, const char *field, co
 static int bus_append_refresh_on_reload(sd_bus_message *m, const char *field, const char *eq) {
         int r;
 
+        assert(eq);
+
         r = sd_bus_message_open_container(m, 'r', "sv");
         if (r < 0)
                 return bus_log_create_error(r);
@@ -2383,6 +2385,8 @@ static const BusProperty cgroup_properties[] = {
         { "ManagedOOMMemoryPressure",              bus_append_string                             },
         { "ManagedOOMPreference",                  bus_append_string                             },
         { "MemoryPressureWatch",                   bus_append_string                             },
+        { "CPUPressureWatch",                      bus_append_string                             },
+        { "IOPressureWatch",                       bus_append_string                             },
         { "DelegateSubgroup",                      bus_append_string                             },
         { "ManagedOOMMemoryPressureLimit",         bus_append_parse_permyriad                    },
         { "MemoryAccounting",                      bus_append_parse_boolean                      },
@@ -2421,6 +2425,8 @@ static const BusProperty cgroup_properties[] = {
         { "SocketBindAllow",                       bus_append_socket_filter                      },
         { "SocketBindDeny",                        bus_append_socket_filter                      },
         { "MemoryPressureThresholdSec",            bus_append_parse_sec_rename                   },
+        { "CPUPressureThresholdSec",               bus_append_parse_sec_rename                   },
+        { "IOPressureThresholdSec",                bus_append_parse_sec_rename                   },
         { "NFTSet",                                bus_append_nft_set                            },
         { "BindNetworkInterface",                  bus_append_string                             },
 

@@ -31,6 +31,7 @@ integration_test_template = {
         'sanitizer-exclude-regex' : '',
         'rtc' : false,
         'tpm' : false,
+        'suppress-sync' : true,
 }
 
 foreach dirname : [
@@ -91,7 +92,7 @@ foreach dirname : [
         'TEST-74-AUX-UTILS',
         'TEST-75-RESOLVED',
         'TEST-78-SIGQUEUE',
-        'TEST-79-MEMPRESS',
+        'TEST-79-PRESSURE',
         'TEST-80-NOTIFYACCESS',
         'TEST-81-GENERATORS',
         'TEST-82-SOFTREBOOT',
@@ -137,6 +138,10 @@ foreach integration_test : integration_tests
 
         if mkosi.found()
                 integration_test_args += ['--mkosi', mkosi.full_path()]
+        endif
+
+        if integration_test['suppress-sync']
+                integration_test_args += ['--suppress-sync']
         endif
 
         integration_test_args += ['--']

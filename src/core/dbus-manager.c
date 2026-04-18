@@ -1265,10 +1265,6 @@ static int list_units_filtered(sd_bus_message *message, void *userdata, sd_bus_e
 
         /* Anyone can call this method */
 
-        r = mac_selinux_access_check(message, "status", reterr_error);
-        if (r < 0)
-                return r;
-
         r = sd_bus_message_new_method_return(message, &reply);
         if (r < 0)
                 return r;
@@ -1280,6 +1276,10 @@ static int list_units_filtered(sd_bus_message *message, void *userdata, sd_bus_e
         HASHMAP_FOREACH_KEY(u, k, m->units) {
                 if (k != u->id)
                         continue;
+
+                r = mac_selinux_unit_access_check(u, message, "status", /* reterr_error= */ NULL);
+                if (r < 0)
+                        continue; /* silently skip units the caller is not allowed to see */
 
                 if (!unit_passes_filter(u, states, patterns))
                         continue;
@@ -2980,14 +2980,19 @@ const sd_bus_vtable bus_manager_vtable[] = {
         SD_BUS_PROPERTY("DefaultLimitRTTIME", "t", bus_property_get_rlimit, offsetof(Manager, defaults.rlimit[RLIMIT_RTTIME]), SD_BUS_VTABLE_PROPERTY_CONST),
         SD_BUS_PROPERTY("DefaultLimitRTTIMESoft", "t", bus_property_get_rlimit, offsetof(Manager, defaults.rlimit[RLIMIT_RTTIME]), SD_BUS_VTABLE_PROPERTY_CONST),
         SD_BUS_PROPERTY("DefaultTasksMax", "t", bus_property_get_tasks_max, offsetof(Manager, defaults.tasks_max), 0),
-        SD_BUS_PROPERTY("DefaultMemoryPressureThresholdUSec", "t", bus_property_get_usec, offsetof(Manager, defaults.memory_pressure_threshold_usec), 0),
-        SD_BUS_PROPERTY("DefaultMemoryPressureWatch", "s", bus_property_get_cgroup_pressure_watch, offsetof(Manager, defaults.memory_pressure_watch), 0),
+        SD_BUS_PROPERTY("DefaultMemoryPressureThresholdUSec", "t", bus_property_get_usec, offsetof(Manager, defaults.pressure[PRESSURE_MEMORY].threshold_usec), 0),
+        SD_BUS_PROPERTY("DefaultMemoryPressureWatch", "s", bus_property_get_cgroup_pressure_watch, offsetof(Manager, defaults.pressure[PRESSURE_MEMORY].watch), 0),
+        SD_BUS_PROPERTY("DefaultCPUPressureThresholdUSec", "t", bus_property_get_usec, offsetof(Manager, defaults.pressure[PRESSURE_CPU].threshold_usec), 0),
+        SD_BUS_PROPERTY("DefaultCPUPressureWatch", "s", bus_property_get_cgroup_pressure_watch, offsetof(Manager, defaults.pressure[PRESSURE_CPU].watch), 0),
+        SD_BUS_PROPERTY("DefaultIOPressureThresholdUSec", "t", bus_property_get_usec, offsetof(Manager, defaults.pressure[PRESSURE_IO].threshold_usec), 0),
+        SD_BUS_PROPERTY("DefaultIOPressureWatch", "s", bus_property_get_cgroup_pressure_watch, offsetof(Manager, defaults.pressure[PRESSURE_IO].watch), 0),
         SD_BUS_PROPERTY("TimerSlackNSec", "t", property_get_timer_slack_nsec, 0, SD_BUS_VTABLE_PROPERTY_CONST),
         SD_BUS_PROPERTY("DefaultOOMPolicy", "s", bus_property_get_oom_policy, offsetof(Manager, defaults.oom_policy), SD_BUS_VTABLE_PROPERTY_CONST),
         SD_BUS_PROPERTY("DefaultOOMScoreAdjust", "i", property_get_oom_score_adjust, 0, SD_BUS_VTABLE_PROPERTY_CONST),
         SD_BUS_PROPERTY("DefaultRestrictSUIDSGID", "b", bus_property_get_bool, offsetof(Manager, defaults.restrict_suid_sgid), SD_BUS_VTABLE_PROPERTY_CONST),
         SD_BUS_PROPERTY("CtrlAltDelBurstAction", "s", bus_property_get_emergency_action, offsetof(Manager, cad_burst_action), SD_BUS_VTABLE_PROPERTY_CONST),
         SD_BUS_PROPERTY("SoftRebootsCount", "u", bus_property_get_unsigned, offsetof(Manager, soft_reboots_count), SD_BUS_VTABLE_PROPERTY_CONST),
+        SD_BUS_PROPERTY("DefaultMemoryZSwapWriteback", "b", bus_property_get_bool, offsetof(Manager, defaults.memory_zswap_writeback), SD_BUS_VTABLE_PROPERTY_CONST),
 
         /* deprecated cgroup v1 property */
         SD_BUS_PROPERTY("DefaultBlockIOAccounting", "b", bus_property_get_bool_false, 0, SD_BUS_VTABLE_PROPERTY_CONST|SD_BUS_VTABLE_DEPRECATED|SD_BUS_VTABLE_HIDDEN),

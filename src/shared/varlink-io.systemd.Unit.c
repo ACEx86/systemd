@@ -3,6 +3,182 @@
 #include "varlink-idl-common.h"
 #include "varlink-io.systemd.Unit.h"
 
+SD_VARLINK_DEFINE_ENUM_TYPE(
+                ExecInputType,
+                SD_VARLINK_DEFINE_ENUM_VALUE(null),
+                SD_VARLINK_DEFINE_ENUM_VALUE(tty),
+                SD_VARLINK_DEFINE_ENUM_VALUE(tty_force),
+                SD_VARLINK_DEFINE_ENUM_VALUE(tty_fail),
+                SD_VARLINK_DEFINE_ENUM_VALUE(socket),
+                SD_VARLINK_DEFINE_ENUM_VALUE(fd),
+                SD_VARLINK_DEFINE_ENUM_VALUE(data),
+                SD_VARLINK_DEFINE_ENUM_VALUE(file));
+
+SD_VARLINK_DEFINE_ENUM_TYPE(
+                ExecUtmpMode,
+                SD_VARLINK_DEFINE_ENUM_VALUE(init),
+                SD_VARLINK_DEFINE_ENUM_VALUE(login),
+                SD_VARLINK_DEFINE_ENUM_VALUE(user));
+
+SD_VARLINK_DEFINE_ENUM_TYPE(
+                ExecPreserveMode,
+                SD_VARLINK_DEFINE_ENUM_VALUE(no),
+                SD_VARLINK_DEFINE_ENUM_VALUE(yes),
+                SD_VARLINK_DEFINE_ENUM_VALUE(restart));
+
+SD_VARLINK_DEFINE_ENUM_TYPE(
+                ExecKeyringMode,
+                SD_VARLINK_DEFINE_ENUM_VALUE(inherit),
+                SD_VARLINK_DEFINE_ENUM_VALUE(private),
+                SD_VARLINK_DEFINE_ENUM_VALUE(shared));
+
+SD_VARLINK_DEFINE_ENUM_TYPE(
+                MemoryTHP,
+                SD_VARLINK_DEFINE_ENUM_VALUE(inherit),
+                SD_VARLINK_DEFINE_ENUM_VALUE(disable),
+                SD_VARLINK_DEFINE_ENUM_VALUE(madvise),
+                SD_VARLINK_DEFINE_ENUM_VALUE(system));
+
+SD_VARLINK_DEFINE_ENUM_TYPE(
+                ProtectProc,
+                SD_VARLINK_DEFINE_ENUM_VALUE(default),
+                SD_VARLINK_DEFINE_ENUM_VALUE(noaccess),
+                SD_VARLINK_DEFINE_ENUM_VALUE(invisible),
+                SD_VARLINK_DEFINE_ENUM_VALUE(ptraceable));
+
+SD_VARLINK_DEFINE_ENUM_TYPE(
+                ProcSubset,
+                SD_VARLINK_DEFINE_ENUM_VALUE(all),
+                SD_VARLINK_DEFINE_ENUM_VALUE(pid));
+
+SD_VARLINK_DEFINE_ENUM_TYPE(
+                ProtectSystem,
+                SD_VARLINK_DEFINE_ENUM_VALUE(no),
+                SD_VARLINK_DEFINE_ENUM_VALUE(yes),
+                SD_VARLINK_DEFINE_ENUM_VALUE(full),
+                SD_VARLINK_DEFINE_ENUM_VALUE(strict));
+
+SD_VARLINK_DEFINE_ENUM_TYPE(
+                ProtectHome,
+                SD_VARLINK_DEFINE_ENUM_VALUE(no),
+                SD_VARLINK_DEFINE_ENUM_VALUE(yes),
+                SD_VARLINK_DEFINE_ENUM_VALUE(read_only),
+                SD_VARLINK_DEFINE_ENUM_VALUE(tmpfs));
+
+SD_VARLINK_DEFINE_ENUM_TYPE(
+                PrivateTmp,
+                SD_VARLINK_DEFINE_ENUM_VALUE(no),
+                SD_VARLINK_DEFINE_ENUM_VALUE(connected),
+                SD_VARLINK_DEFINE_ENUM_VALUE(disconnected));
+
+SD_VARLINK_DEFINE_ENUM_TYPE(
+                PrivateUsers,
+                SD_VARLINK_DEFINE_ENUM_VALUE(no),
+                SD_VARLINK_DEFINE_ENUM_VALUE(self),
+                SD_VARLINK_DEFINE_ENUM_VALUE(identity),
+                SD_VARLINK_DEFINE_ENUM_VALUE(full),
+                SD_VARLINK_DEFINE_ENUM_VALUE(managed));
+
+SD_VARLINK_DEFINE_ENUM_TYPE(
+                ProtectHostname,
+                SD_VARLINK_DEFINE_ENUM_VALUE(no),
+                SD_VARLINK_DEFINE_ENUM_VALUE(yes),
+                SD_VARLINK_DEFINE_ENUM_VALUE(private));
+
+SD_VARLINK_DEFINE_ENUM_TYPE(
+                ProtectControlGroups,
+                SD_VARLINK_DEFINE_ENUM_VALUE(no),
+                SD_VARLINK_DEFINE_ENUM_VALUE(yes),
+                SD_VARLINK_DEFINE_ENUM_VALUE(private),
+                SD_VARLINK_DEFINE_ENUM_VALUE(strict));
+
+SD_VARLINK_DEFINE_ENUM_TYPE(
+                PrivatePIDs,
+                SD_VARLINK_DEFINE_ENUM_VALUE(no),
+                SD_VARLINK_DEFINE_ENUM_VALUE(yes));
+
+SD_VARLINK_DEFINE_ENUM_TYPE(
+                CGroupDevicePolicy,
+                SD_VARLINK_DEFINE_ENUM_VALUE(auto),
+                SD_VARLINK_DEFINE_ENUM_VALUE(closed),
+                SD_VARLINK_DEFINE_ENUM_VALUE(strict));
+
+SD_VARLINK_DEFINE_ENUM_TYPE(
+                ManagedOOMPreference,
+                SD_VARLINK_DEFINE_ENUM_VALUE(none),
+                SD_VARLINK_DEFINE_ENUM_VALUE(avoid),
+                SD_VARLINK_DEFINE_ENUM_VALUE(omit));
+
+SD_VARLINK_DEFINE_ENUM_TYPE(
+                CollectMode,
+                SD_VARLINK_DEFINE_ENUM_VALUE(inactive),
+                SD_VARLINK_DEFINE_ENUM_VALUE(inactive_or_failed));
+
+SD_VARLINK_DEFINE_ENUM_TYPE(
+                JobMode,
+                SD_VARLINK_DEFINE_ENUM_VALUE(fail),
+                SD_VARLINK_DEFINE_ENUM_VALUE(lenient),
+                SD_VARLINK_DEFINE_ENUM_VALUE(replace),
+                SD_VARLINK_DEFINE_ENUM_VALUE(replace_irreversibly),
+                SD_VARLINK_DEFINE_ENUM_VALUE(isolate),
+                SD_VARLINK_DEFINE_ENUM_VALUE(flush),
+                SD_VARLINK_DEFINE_ENUM_VALUE(ignore_dependencies),
+                SD_VARLINK_DEFINE_ENUM_VALUE(ignore_requirements),
+                SD_VARLINK_DEFINE_ENUM_VALUE(triggering),
+                SD_VARLINK_DEFINE_ENUM_VALUE(restart_dependencies));
+
+SD_VARLINK_DEFINE_ENUM_TYPE(
+                CGroupController,
+                SD_VARLINK_DEFINE_ENUM_VALUE(cpu),
+                SD_VARLINK_DEFINE_ENUM_VALUE(cpuacct),
+                SD_VARLINK_DEFINE_ENUM_VALUE(cpuset),
+                SD_VARLINK_DEFINE_ENUM_VALUE(io),
+                SD_VARLINK_DEFINE_ENUM_VALUE(blkio),
+                SD_VARLINK_DEFINE_ENUM_VALUE(memory),
+                SD_VARLINK_DEFINE_ENUM_VALUE(devices),
+                SD_VARLINK_DEFINE_ENUM_VALUE(pids),
+                SD_VARLINK_DEFINE_ENUM_VALUE(bpf_firewall),
+                SD_VARLINK_DEFINE_ENUM_VALUE(bpf_devices),
+                SD_VARLINK_DEFINE_ENUM_VALUE(bpf_foreign),
+                SD_VARLINK_DEFINE_ENUM_VALUE(bpf_socket_bind),
+                SD_VARLINK_DEFINE_ENUM_VALUE(bpf_restrict_network_interfaces),
+                SD_VARLINK_DEFINE_ENUM_VALUE(bpf_bind_network_interface));
+
+SD_VARLINK_DEFINE_ENUM_TYPE(
+                PrivateBPF,
+                SD_VARLINK_DEFINE_ENUM_VALUE(no),
+                SD_VARLINK_DEFINE_ENUM_VALUE(yes));
+
+SD_VARLINK_DEFINE_ENUM_TYPE(
+                CPUSchedulingPolicy,
+                SD_VARLINK_DEFINE_ENUM_VALUE(other),
+                SD_VARLINK_DEFINE_ENUM_VALUE(batch),
+                SD_VARLINK_DEFINE_ENUM_VALUE(idle),
+                SD_VARLINK_DEFINE_ENUM_VALUE(fifo),
+                SD_VARLINK_DEFINE_ENUM_VALUE(ext),
+                SD_VARLINK_DEFINE_ENUM_VALUE(rr));
+
+SD_VARLINK_DEFINE_ENUM_TYPE(
+                IOSchedulingClass,
+                SD_VARLINK_DEFINE_ENUM_VALUE(none),
+                SD_VARLINK_DEFINE_ENUM_VALUE(realtime),
+                SD_VARLINK_DEFINE_ENUM_VALUE(best_effort),
+                SD_VARLINK_DEFINE_ENUM_VALUE(idle));
+
+SD_VARLINK_DEFINE_ENUM_TYPE(
+                NUMAPolicy,
+                SD_VARLINK_DEFINE_ENUM_VALUE(default),
+                SD_VARLINK_DEFINE_ENUM_VALUE(preferred),
+                SD_VARLINK_DEFINE_ENUM_VALUE(bind),
+                SD_VARLINK_DEFINE_ENUM_VALUE(interleave),
+                SD_VARLINK_DEFINE_ENUM_VALUE(local));
+
+SD_VARLINK_DEFINE_ENUM_TYPE(
+                MountPropagationFlag,
+                SD_VARLINK_DEFINE_ENUM_VALUE(shared),
+                SD_VARLINK_DEFINE_ENUM_VALUE(slave),
+                SD_VARLINK_DEFINE_ENUM_VALUE(private));
+
 /* CGroupContext */
 static SD_VARLINK_DEFINE_STRUCT_TYPE(
                 CGroupTasksMax,
@@ -199,7 +375,7 @@ static SD_VARLINK_DEFINE_STRUCT_TYPE(
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.resource-control.html#DeviceAllow="),
                 SD_VARLINK_DEFINE_FIELD_BY_TYPE(DeviceAllow, CGroupDeviceAllow, SD_VARLINK_ARRAY|SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.resource-control.html#DevicePolicy=auto%7Cclosed%7Cstrict"),
-                SD_VARLINK_DEFINE_FIELD(DevicePolicy, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(DevicePolicy, CGroupDevicePolicy, 0),
 
                 /* Control Group Management
                  * https://www.freedesktop.org/software/systemd/man/latest/systemd.resource-control.html#Control%20Group%20Management */
@@ -208,26 +384,34 @@ static SD_VARLINK_DEFINE_STRUCT_TYPE(
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.resource-control.html#DelegateSubgroup="),
                 SD_VARLINK_DEFINE_FIELD(DelegateSubgroup, SD_VARLINK_STRING, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.resource-control.html#DisableControllers="),
-                SD_VARLINK_DEFINE_FIELD(DelegateControllers, SD_VARLINK_STRING, SD_VARLINK_ARRAY|SD_VARLINK_NULLABLE),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(DelegateControllers, CGroupController, SD_VARLINK_ARRAY|SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.resource-control.html#DisableControllers="),
-                SD_VARLINK_DEFINE_FIELD(DisableControllers, SD_VARLINK_STRING, SD_VARLINK_ARRAY|SD_VARLINK_NULLABLE),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(DisableControllers, CGroupController, SD_VARLINK_ARRAY|SD_VARLINK_NULLABLE),
 
                 /* Memory Pressure Control
                  * https://www.freedesktop.org/software/systemd/man/latest/systemd.resource-control.html#Memory%20Pressure%20Control */
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.resource-control.html#ManagedOOMSwap=auto%7Ckill"),
-                SD_VARLINK_DEFINE_FIELD(ManagedOOMSwap, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(ManagedOOMSwap, ManagedOOMMode, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.resource-control.html#ManagedOOMSwap=auto%7Ckill"),
-                SD_VARLINK_DEFINE_FIELD(ManagedOOMMemoryPressure, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(ManagedOOMMemoryPressure, ManagedOOMMode, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.resource-control.html#ManagedOOMMemoryPressureLimit="),
                 SD_VARLINK_DEFINE_FIELD(ManagedOOMMemoryPressureLimit, SD_VARLINK_INT, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.resource-control.html#ManagedOOMMemoryPressureDurationSec="),
                 SD_VARLINK_DEFINE_FIELD(ManagedOOMMemoryPressureDurationUSec, SD_VARLINK_INT, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.resource-control.html#ManagedOOMPreference=none%7Cavoid%7Comit"),
-                SD_VARLINK_DEFINE_FIELD(ManagedOOMPreference, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(ManagedOOMPreference, ManagedOOMPreference, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.resource-control.html#MemoryPressureWatch="),
-                SD_VARLINK_DEFINE_FIELD(MemoryPressureWatch, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(MemoryPressureWatch, CGroupPressureWatch, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.resource-control.html#MemoryPressureThresholdSec="),
                 SD_VARLINK_DEFINE_FIELD(MemoryPressureThresholdUSec, SD_VARLINK_INT, SD_VARLINK_NULLABLE),
+                SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.resource-control.html#CPUPressureWatch="),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(CPUPressureWatch, CGroupPressureWatch, 0),
+                SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.resource-control.html#CPUPressureThresholdSec="),
+                SD_VARLINK_DEFINE_FIELD(CPUPressureThresholdUSec, SD_VARLINK_INT, SD_VARLINK_NULLABLE),
+                SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.resource-control.html#IOPressureWatch="),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(IOPressureWatch, CGroupPressureWatch, 0),
+                SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.resource-control.html#IOPressureThresholdSec="),
+                SD_VARLINK_DEFINE_FIELD(IOPressureThresholdUSec, SD_VARLINK_INT, SD_VARLINK_NULLABLE),
 
                 /* Others */
                 SD_VARLINK_FIELD_COMMENT("Reflects whether to forward coredumps for processes that crash within this cgroup"),
@@ -437,9 +621,9 @@ static SD_VARLINK_DEFINE_STRUCT_TYPE(
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#BindLogSockets="),
                 SD_VARLINK_DEFINE_FIELD(BindLogSockets, SD_VARLINK_BOOL, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#ProtectProc="),
-                SD_VARLINK_DEFINE_FIELD(ProtectProc, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(ProtectProc, ProtectProc, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#ProcSubset="),
-                SD_VARLINK_DEFINE_FIELD(ProcSubset, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(ProcSubset, ProcSubset, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#BindPaths="),
                 SD_VARLINK_DEFINE_FIELD_BY_TYPE(BindPaths, BindPath, SD_VARLINK_ARRAY|SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#BindPaths="),
@@ -498,7 +682,7 @@ static SD_VARLINK_DEFINE_STRUCT_TYPE(
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#CoredumpFilter="),
                 SD_VARLINK_DEFINE_FIELD(CoredumpFilter, SD_VARLINK_INT, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#KeyringMode="),
-                SD_VARLINK_DEFINE_FIELD(KeyringMode, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(KeyringMode, ExecKeyringMode, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#OOMScoreAdjust="),
                 SD_VARLINK_DEFINE_FIELD(OOMScoreAdjust, SD_VARLINK_INT, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#TimerSlackNSec="),
@@ -513,7 +697,7 @@ static SD_VARLINK_DEFINE_STRUCT_TYPE(
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#Nice="),
                 SD_VARLINK_DEFINE_FIELD(Nice, SD_VARLINK_INT, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#CPUSchedulingPolicy="),
-                SD_VARLINK_DEFINE_FIELD(CPUSchedulingPolicy, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(CPUSchedulingPolicy, CPUSchedulingPolicy, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#CPUSchedulingPriority="),
                 SD_VARLINK_DEFINE_FIELD(CPUSchedulingPriority, SD_VARLINK_INT, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#CPUSchedulingResetOnFork="),
@@ -521,25 +705,25 @@ static SD_VARLINK_DEFINE_STRUCT_TYPE(
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#CPUAffinity="),
                 SD_VARLINK_DEFINE_FIELD_BY_TYPE(CPUAffinity, CPUAffinity, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#NUMAPolicy="),
-                SD_VARLINK_DEFINE_FIELD(NUMAPolicy, SD_VARLINK_STRING, SD_VARLINK_NULLABLE),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(NUMAPolicy, NUMAPolicy, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#NUMAMask="),
                 SD_VARLINK_DEFINE_FIELD(NUMAMask, SD_VARLINK_INT, SD_VARLINK_ARRAY|SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#IOSchedulingClass="),
-                SD_VARLINK_DEFINE_FIELD(IOSchedulingClass, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(IOSchedulingClass, IOSchedulingClass, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#IOSchedulingPriority="),
                 SD_VARLINK_DEFINE_FIELD(IOSchedulingPriority, SD_VARLINK_INT, 0),
 
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#MemoryKSM="),
                 SD_VARLINK_DEFINE_FIELD(MemoryKSM, SD_VARLINK_BOOL, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#MemoryTHP="),
-                SD_VARLINK_DEFINE_FIELD(MemoryTHP, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(MemoryTHP, MemoryTHP, 0),
 
                 /* Sandboxing
                  * https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html#Sandboxing */
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#ProtectSystem="),
-                SD_VARLINK_DEFINE_FIELD(ProtectSystem, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(ProtectSystem, ProtectSystem, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#ProtectHome="),
-                SD_VARLINK_DEFINE_FIELD(ProtectHome, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(ProtectHome, ProtectHome, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#RuntimeDirectory="),
                 SD_VARLINK_DEFINE_FIELD_BY_TYPE(RuntimeDirectory, ExecDirectory, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#RuntimeDirectory="),
@@ -551,7 +735,7 @@ static SD_VARLINK_DEFINE_STRUCT_TYPE(
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#RuntimeDirectory="),
                 SD_VARLINK_DEFINE_FIELD_BY_TYPE(ConfigurationDirectory, ExecDirectory, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#RuntimeDirectoryPreserve="),
-                SD_VARLINK_DEFINE_FIELD(RuntimeDirectoryPreserve, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(RuntimeDirectoryPreserve, ExecPreserveMode, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#TimeoutCleanSec="),
                 SD_VARLINK_DEFINE_FIELD(TimeoutCleanUSec, SD_VARLINK_INT, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#ReadWritePaths="),
@@ -567,7 +751,7 @@ static SD_VARLINK_DEFINE_STRUCT_TYPE(
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#TemporaryFileSystem="),
                 SD_VARLINK_DEFINE_FIELD_BY_TYPE(TemporaryFileSystem, TemporaryFilesystem, SD_VARLINK_ARRAY|SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#PrivateTmp="),
-                SD_VARLINK_DEFINE_FIELD(PrivateTmp, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(PrivateTmp, PrivateTmp, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#PrivateDevices="),
                 SD_VARLINK_DEFINE_FIELD(PrivateDevices, SD_VARLINK_STRING, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#PrivateNetwork="),
@@ -579,13 +763,13 @@ static SD_VARLINK_DEFINE_STRUCT_TYPE(
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#IPCNamespacePath="),
                 SD_VARLINK_DEFINE_FIELD(IPCNamespacePath, SD_VARLINK_STRING, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#PrivatePIDs="),
-                SD_VARLINK_DEFINE_FIELD(PrivatePIDs, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(PrivatePIDs, PrivatePIDs, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#PrivateUsers="),
-                SD_VARLINK_DEFINE_FIELD(PrivateUsers, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(PrivateUsers, PrivateUsers, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#UserNamespacePath="),
                 SD_VARLINK_DEFINE_FIELD(UserNamespacePath, SD_VARLINK_STRING, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#ProtectHostname="),
-                SD_VARLINK_DEFINE_FIELD(ProtectHostname, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(ProtectHostname, ProtectHostname, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#ProtectClock="),
                 SD_VARLINK_DEFINE_FIELD(ProtectClock, SD_VARLINK_STRING, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#ProtectKernelTunables="),
@@ -595,7 +779,7 @@ static SD_VARLINK_DEFINE_STRUCT_TYPE(
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#ProtectKernelLogs="),
                 SD_VARLINK_DEFINE_FIELD(ProtectKernelLogs, SD_VARLINK_STRING, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#ProtectControlGroups="),
-                SD_VARLINK_DEFINE_FIELD(ProtectControlGroups, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(ProtectControlGroups, ProtectControlGroups, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#RestrictAddressFamilies="),
                 SD_VARLINK_DEFINE_FIELD_BY_TYPE(RestrictAddressFamilies, AddressFamilyList, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#RestrictFileSystems="),
@@ -605,7 +789,7 @@ static SD_VARLINK_DEFINE_STRUCT_TYPE(
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#DelegateNamespaces="),
                 SD_VARLINK_DEFINE_FIELD(DelegateNamespaces, SD_VARLINK_STRING, SD_VARLINK_ARRAY|SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#PrivatePBF="),
-                SD_VARLINK_DEFINE_FIELD(PrivatePBF, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(PrivatePBF, PrivateBPF, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#BPFDelegateCommands="),
                 SD_VARLINK_DEFINE_FIELD(BPFDelegateCommands, SD_VARLINK_STRING, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#BPFDelegateMaps="),
@@ -627,7 +811,7 @@ static SD_VARLINK_DEFINE_STRUCT_TYPE(
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#PrivateMounts="),
                 SD_VARLINK_DEFINE_FIELD(PrivateMounts, SD_VARLINK_BOOL, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#MountFlags="),
-                SD_VARLINK_DEFINE_FIELD(MountFlags, SD_VARLINK_STRING, SD_VARLINK_NULLABLE),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(MountFlags, MountPropagationFlag, SD_VARLINK_NULLABLE),
 
                 /* System Call Filtering
                  * https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html#System%20Call%20Filtering */
@@ -654,11 +838,11 @@ static SD_VARLINK_DEFINE_STRUCT_TYPE(
                 /* Logging and Standard Input/Output
                  * https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html#Logging%20and%20Standard%20Input/Output */
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#StandardInput="),
-                SD_VARLINK_DEFINE_FIELD(StandardInput, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(StandardInput, ExecInputType, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#StandardOutput="),
-                SD_VARLINK_DEFINE_FIELD(StandardOutput, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(StandardOutput, ExecOutputType, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#StandardError="),
-                SD_VARLINK_DEFINE_FIELD(StandardError, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(StandardError, ExecOutputType, 0),
                 SD_VARLINK_FIELD_COMMENT("The file descriptor name to connect standard input to"),
                 SD_VARLINK_DEFINE_FIELD(StandardInputFileDescriptorName, SD_VARLINK_STRING, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("The file descriptor name to connect standard output to"),
@@ -716,7 +900,7 @@ static SD_VARLINK_DEFINE_STRUCT_TYPE(
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#UtmpIdentifier="),
                 SD_VARLINK_DEFINE_FIELD(UtmpIdentifier, SD_VARLINK_STRING, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man"PROJECT_VERSION_STR"systemd.exec.html#UtmpMode="),
-                SD_VARLINK_DEFINE_FIELD(UtmpMode, SD_VARLINK_STRING, 0));
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(UtmpMode, ExecUtmpMode, 0));
 
 /* UnitContext */
 static SD_VARLINK_DEFINE_STRUCT_TYPE(
@@ -800,9 +984,9 @@ static SD_VARLINK_DEFINE_STRUCT_TYPE(
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.unit.html#WantsMountsFor="),
                 SD_VARLINK_DEFINE_FIELD(WantsMountsFor, SD_VARLINK_STRING, SD_VARLINK_ARRAY|SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.unit.html#OnSuccessJobMode="),
-                SD_VARLINK_DEFINE_FIELD(OnSuccessJobMode, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(OnSuccessJobMode, JobMode, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.unit.html#OnSuccessJobMode="),
-                SD_VARLINK_DEFINE_FIELD(OnFailureJobMode, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(OnFailureJobMode, JobMode, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.unit.html#IgnoreOnIsolate="),
                 SD_VARLINK_DEFINE_FIELD(IgnoreOnIsolate, SD_VARLINK_BOOL, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.unit.html#StopWhenUnneeded="),
@@ -818,11 +1002,11 @@ static SD_VARLINK_DEFINE_STRUCT_TYPE(
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.unit.html#SurviveFinalKillSignal="),
                 SD_VARLINK_DEFINE_FIELD(SurviveFinalKillSignal, SD_VARLINK_BOOL, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.unit.html#CollectMode="),
-                SD_VARLINK_DEFINE_FIELD(CollectMode, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(CollectMode, CollectMode, 0),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.unit.html#FailureAction="),
-                SD_VARLINK_DEFINE_FIELD(FailureAction, SD_VARLINK_STRING, SD_VARLINK_NULLABLE),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(FailureAction, EmergencyAction, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.unit.html#FailureAction="),
-                SD_VARLINK_DEFINE_FIELD(SuccessAction, SD_VARLINK_STRING, SD_VARLINK_NULLABLE),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(SuccessAction, EmergencyAction, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.unit.html#FailureActionExitStatus="),
                 SD_VARLINK_DEFINE_FIELD(FailureActionExitStatus, SD_VARLINK_INT, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.unit.html#FailureActionExitStatus="),
@@ -832,13 +1016,13 @@ static SD_VARLINK_DEFINE_STRUCT_TYPE(
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.unit.html#JobTimeoutSec="),
                 SD_VARLINK_DEFINE_FIELD(JobRunningTimeoutUSec, SD_VARLINK_INT, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.unit.html#JobTimeoutAction="),
-                SD_VARLINK_DEFINE_FIELD(JobTimeoutAction, SD_VARLINK_STRING, SD_VARLINK_NULLABLE),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(JobTimeoutAction, EmergencyAction, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.unit.html#JobTimeoutAction="),
                 SD_VARLINK_DEFINE_FIELD(JobTimeoutRebootArgument, SD_VARLINK_STRING, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.unit.html#StartLimitIntervalSec=interval"),
                 SD_VARLINK_DEFINE_FIELD_BY_TYPE(StartLimit, RateLimit, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.unit.html#StartLimitIntervalSec=interval"),
-                SD_VARLINK_DEFINE_FIELD(StartLimitAction, SD_VARLINK_STRING, SD_VARLINK_NULLABLE),
+                SD_VARLINK_DEFINE_FIELD_BY_TYPE(StartLimitAction, EmergencyAction, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.unit.html#RebootArgument="),
                 SD_VARLINK_DEFINE_FIELD(RebootArgument, SD_VARLINK_STRING, SD_VARLINK_NULLABLE),
                 SD_VARLINK_FIELD_COMMENT("https://www.freedesktop.org/software/systemd/man/"PROJECT_VERSION_STR"/systemd.unit.html#SourcePath="),
@@ -1067,6 +1251,10 @@ SD_VARLINK_DEFINE_INTERFACE(
                 &vl_type_ProcessId,
 
                 /* CGroupContext */
+                &vl_type_CGroupDevicePolicy,
+                &vl_type_ManagedOOMMode,
+                &vl_type_ManagedOOMPreference,
+                &vl_type_CGroupPressureWatch,
                 &vl_type_CGroupTasksMax,
                 &vl_type_CGroupIODeviceWeight,
                 &vl_type_CGroupIODeviceLimit,
@@ -1076,6 +1264,7 @@ SD_VARLINK_DEFINE_INTERFACE(
                 &vl_type_CGroupRestrictNetworkInterfaces,
                 &vl_type_CGroupNFTSet,
                 &vl_type_CGroupBPFProgram,
+                &vl_type_CGroupController,
                 &vl_type_CGroupDeviceAllow,
                 SD_VARLINK_SYMBOL_COMMENT("CGroup context of a unit"),
                 &vl_type_CGroupContext,
@@ -1083,6 +1272,26 @@ SD_VARLINK_DEFINE_INTERFACE(
                 &vl_type_CGroupRuntime,
 
                 /* ExecContext */
+                &vl_type_ExecInputType,
+                &vl_type_ExecOutputType,
+                &vl_type_ExecUtmpMode,
+                &vl_type_ExecPreserveMode,
+                &vl_type_ExecKeyringMode,
+                &vl_type_MemoryTHP,
+                &vl_type_ProtectProc,
+                &vl_type_ProcSubset,
+                &vl_type_ProtectSystem,
+                &vl_type_ProtectHome,
+                &vl_type_PrivateTmp,
+                &vl_type_PrivateUsers,
+                &vl_type_ProtectHostname,
+                &vl_type_ProtectControlGroups,
+                &vl_type_PrivatePIDs,
+                &vl_type_PrivateBPF,
+                &vl_type_CPUSchedulingPolicy,
+                &vl_type_IOSchedulingClass,
+                &vl_type_NUMAPolicy,
+                &vl_type_MountPropagationFlag,
                 &vl_type_WorkingDirectory,
                 &vl_type_PartitionMountOptions,
                 &vl_type_BindPath,
@@ -1108,6 +1317,11 @@ SD_VARLINK_DEFINE_INTERFACE(
                 &vl_type_SetCredential,
                 SD_VARLINK_SYMBOL_COMMENT("Exec context of a unit"),
                 &vl_type_ExecContext,
+
+                /* UnitContext enums */
+                &vl_type_CollectMode,
+                &vl_type_EmergencyAction,
+                &vl_type_JobMode,
 
                 /* Errors */
                 SD_VARLINK_SYMBOL_COMMENT("No matching unit found"),

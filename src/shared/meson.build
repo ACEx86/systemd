@@ -77,6 +77,7 @@ shared_sources = files(
         'exit-status.c',
         'extension-util.c',
         'factory-reset.c',
+        'facts.c',
         'fdset.c',
         'fido2-util.c',
         'find-esp.c',
@@ -124,6 +125,7 @@ shared_sources = files(
         'machine-bind-user.c',
         'machine-credential.c',
         'machine-id-setup.c',
+        'machine-register.c',
         'macvlan-util.c',
         'main-func.c',
         'metrics.c',
@@ -163,6 +165,7 @@ shared_sources = files(
         'printk-util.c',
         'prompt-util.c',
         'ptyfwd.c',
+        'qmp-client.c',
         'qrcode-util.c',
         'quota-util.c',
         'reboot-util.c',
@@ -205,6 +208,7 @@ shared_sources = files(
         'varlink-io.systemd.BootControl.c',
         'varlink-io.systemd.Credentials.c',
         'varlink-io.systemd.FactoryReset.c',
+        'varlink-io.systemd.Facts.c',
         'varlink-io.systemd.Hostname.c',
         'varlink-io.systemd.Import.c',
         'varlink-io.systemd.InstanceMetadata.c',
@@ -213,6 +217,7 @@ shared_sources = files(
         'varlink-io.systemd.Login.c',
         'varlink-io.systemd.Machine.c',
         'varlink-io.systemd.MachineImage.c',
+        'varlink-io.systemd.MachineInstance.c',
         'varlink-io.systemd.ManagedOOM.c',
         'varlink-io.systemd.Manager.c',
         'varlink-io.systemd.Metrics.c',
@@ -223,13 +228,16 @@ shared_sources = files(
         'varlink-io.systemd.Network.Link.c',
         'varlink-io.systemd.PCRExtend.c',
         'varlink-io.systemd.PCRLock.c',
+        'varlink-io.systemd.QemuMachineInstance.c',
         'varlink-io.systemd.Repart.c',
         'varlink-io.systemd.Resolve.c',
         'varlink-io.systemd.Resolve.Hook.c',
         'varlink-io.systemd.Resolve.Monitor.c',
+        'varlink-io.systemd.Shutdown.c',
         'varlink-io.systemd.Udev.c',
         'varlink-io.systemd.Unit.c',
         'varlink-io.systemd.UserDatabase.c',
+        'varlink-io.systemd.VirtualMachineInstance.c',
         'varlink-io.systemd.oom.c',
         'varlink-io.systemd.oom.Prekill.c',
         'varlink-io.systemd.service.c',
@@ -451,3 +459,18 @@ libshared_fdisk = static_library(
                         userspace],
         c_args : ['-fvisibility=default'],
         build_by_default : false)
+
+# A small shared file that is linked into a few places.
+# It is not part of libshared because this code needs libcurl and
+# we don't want to link libshared to libcurl.
+if conf.get('HAVE_LIBCURL') == 1
+        libcurlutil_static = static_library(
+                'curl-util',
+                'curl-util.c',
+                implicit_include_directories : false,
+                dependencies : [userspace, libcurl],
+                include_directories : includes,
+                build_by_default : false)
+else
+        libcurlutil_static = []
+endif

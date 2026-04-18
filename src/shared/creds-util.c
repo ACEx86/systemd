@@ -129,6 +129,8 @@ int open_credentials_dir(void) {
 int get_system_credentials_dir(const char **ret) {
         int r;
 
+        assert(ret);
+
         /* Note that for system credentials the environment variable we honour is just for debugging purpose
          * (unlike for the per-service credential path env var where it's key part of the protocol). */
         r = get_credentials_dir_internal("SYSTEMD_SYSTEM_CREDENTIALS_DIRECTORY", ret);
@@ -141,6 +143,8 @@ int get_system_credentials_dir(const char **ret) {
 
 int get_encrypted_system_credentials_dir(const char **ret) {
         int r;
+
+        assert(ret);
 
         r = get_credentials_dir_internal("SYSTEMD_ENCRYPTED_SYSTEM_CREDENTIALS_DIRECTORY", ret);
         if (r >= 0 || r != -ENXIO)
@@ -271,6 +275,8 @@ int read_credential_strings_many_internal(
         bool all = true;
         int r, ret = 0;
 
+        assert(first_value);
+
         /* Reads a bunch of credentials into the specified buffers. If the specified buffers are already
          * non-NULL frees them if a credential is found. Only supports string-based credentials
          * (i.e. refuses embedded NUL bytes).
@@ -333,6 +339,9 @@ int get_credential_user_password(const char *username, char **ret_password, bool
         _cleanup_(erase_and_freep) char *creds_password = NULL;
         _cleanup_free_ char *cn = NULL;
         int r;
+
+        assert(ret_password);
+        assert(ret_is_hashed);
 
         /* Try to pick up the password for this account via the credentials logic */
         cn = strjoin("passwd.hashed-password.", username);

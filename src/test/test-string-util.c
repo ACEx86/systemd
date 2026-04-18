@@ -325,6 +325,8 @@ TEST(strrep) {
 
         ASSERT_STREQ(onea, "waldo");
         ASSERT_STREQ(threea, "waldowaldowaldo");
+
+        ASSERT_NULL(strrep("waldo", SIZE_MAX - 1));
 }
 
 TEST(string_has_cc) {
@@ -533,6 +535,29 @@ TEST(endswith_no_case) {
         assert_se(!endswith_no_case("foobar", "FOOBARFOOFOO"));
 }
 
+TEST(strrstr_no_case) {
+        ASSERT_STREQ(strrstr_no_case("fooBARfoobar", "bar"), "bar");
+        ASSERT_STREQ(strrstr_no_case("fooBARfoobar", "BAR"), "bar");
+        ASSERT_STREQ(strrstr_no_case("fooBARfoobar", "bAR"), "bar");
+        ASSERT_STREQ(strrstr_no_case("fooBARfoobar", "FOO"), "foobar");
+        ASSERT_STREQ(strrstr_no_case("fooBARfoobar", "foo"), "foobar");
+        ASSERT_STREQ(strrstr_no_case("fooBARfoobar", "FoO"), "foobar");
+        ASSERT_STREQ(strrstr_no_case("aXaXa", "x"), "Xa");
+        ASSERT_STREQ(strrstr_no_case("aXaXa", "X"), "Xa");
+        ASSERT_STREQ(strrstr_no_case("xHello", "hello"), "Hello");
+        ASSERT_STREQ(strrstr_no_case("Hello", "l"), "lo");
+        ASSERT_STREQ(strrstr_no_case("Hello", ""), "");
+        ASSERT_STREQ(strrstr_no_case("", ""), "");
+        ASSERT_STREQ(strrstr_no_case("FOO", "foo"), "FOO");
+        ASSERT_STREQ(strrstr_no_case("hello", "hello"), "hello");
+        ASSERT_STREQ(strrstr_no_case("X", "x"), "X");
+
+        ASSERT_NULL(strrstr_no_case("hello", "xyz"));
+        ASSERT_NULL(strrstr_no_case("", "x"));
+        ASSERT_NULL(strrstr_no_case(NULL, "x"));
+        ASSERT_NULL(strrstr_no_case("x", NULL));
+}
+
 TEST(delete_chars) {
         char *s, input[] = "   hello, waldo.   abc";
 
@@ -615,6 +640,28 @@ TEST(split_pair) {
         ASSERT_OK(split_pair("===", "==", &a, &b));
         ASSERT_STREQ(a, "");
         ASSERT_STREQ(b, "=");
+}
+
+TEST(empty_to_null) {
+        const char *s = "asdf", *n = NULL, *e = "";
+        char *t = (char*) "asdf";
+        const char p[] = "asdf";
+        char q[] = "asdf";
+
+        /* empty_to_null cannot be used with constant strings, e.g.
+         * empty_to_null("") fails with 'error: cast specifies array type'. */
+
+        ASSERT_NULL(empty_to_null(NULL));
+        ASSERT_NULL(empty_to_null(n));
+        ASSERT_NULL(empty_to_null(e));
+        ASSERT_STREQ(empty_to_null(s), "asdf");
+        ASSERT_NULL(empty_to_null(s + 4));
+        ASSERT_STREQ(empty_to_null(t), "asdf");
+        ASSERT_NULL(empty_to_null(t + 4));
+        ASSERT_STREQ(empty_to_null(&p[0]), "asdf");
+        ASSERT_NULL(empty_to_null(&p[0] + 4));
+        ASSERT_STREQ(empty_to_null(&q[0]), "asdf");
+        ASSERT_NULL(empty_to_null(&q[0] + 4));
 }
 
 TEST(first_word) {

@@ -750,12 +750,21 @@ static int context_from_cmdline(Context *c, Action action) {
 }
 
 static int context_inspect_kernel(Context *c) {
+        int r;
+
         assert(c);
 
         if (!c->kernel)
                 return 0;
 
-        return inspect_kernel(c->rfd, c->kernel, &c->kernel_image_type, NULL, NULL, NULL);
+        r = inspect_kernel(
+                        c->rfd,
+                        c->kernel,
+                        &c->kernel_image_type);
+        if (r < 0)
+                return log_error_errno(r, "Failed to inspect kernel image '%s': %m", c->kernel);
+
+        return 0;
 }
 
 static int context_ensure_layout(Context *c) {
@@ -1119,6 +1128,7 @@ static int kernel_from_version(const char *version, char **ret_kernel) {
         int r;
 
         assert(version);
+        assert(ret_kernel);
 
         vmlinuz = path_join("/usr/lib/modules/", version, "/vmlinuz");
         if (!vmlinuz)

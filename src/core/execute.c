@@ -113,7 +113,7 @@ int exec_context_apply_tty_size(
         if (rows == UINT_MAX && cols == UINT_MAX &&
             exec_context_shall_ansi_seq_reset(context) &&
             isatty_safe(input_fd)) {
-                r = terminal_get_size_by_dsr(input_fd, output_fd, &rows, &cols);
+                r = terminal_get_size(input_fd, output_fd, &rows, &cols, /* try_dsr= */ true, /* try_csi18= */ false);
                 if (r < 0)
                         log_debug_errno(r, "Failed to get terminal size by DSR, ignoring: %m");
         }
@@ -696,10 +696,10 @@ void exec_context_done(ExecContext *c) {
         bind_mount_free_many(c->bind_mounts, c->n_bind_mounts);
         c->bind_mounts = NULL;
         c->n_bind_mounts = 0;
-        mount_image_free_many(c->mount_images, c->n_mount_images);
+        mount_image_free_array(c->mount_images, c->n_mount_images);
         c->mount_images = NULL;
         c->n_mount_images = 0;
-        mount_image_free_many(c->extension_images, c->n_extension_images);
+        mount_image_free_array(c->extension_images, c->n_extension_images);
         c->extension_images = NULL;
         c->n_extension_images = 0;
         c->extension_directories = strv_free(c->extension_directories);
@@ -2372,6 +2372,8 @@ static int exec_shared_runtime_add(
 
         assert(m);
         assert(id);
+        assert(tmp_dir);
+        assert(var_tmp_dir);
 
         /* tmp_dir, var_tmp_dir, {net,ipc}ns_storage_socket fds are donated on success */
 

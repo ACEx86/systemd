@@ -2,7 +2,39 @@ systemd System and Service Manager
 
 CHANGES WITH 261 in spe:
 
+        Announcements of Future Feature Removals and Incompatible Changes:
+
+        * systemd-logind's integration with the UAPI.1 Boot Loader
+          Specification (which allows systemctl reboot --boot-loader-entry=
+          switch to work) so far has supported a special directory
+          /run/boot-loader-entries/ which allowed defining boot loader entries
+          outside of the ESP/XBOOTLDR partition for compatibility with legacy
+          systems that do not natively implement UAPI.1. However, it appears
+          that (to our knowledge) it is not actually being used by any project
+          (quite unlike UAPI.1 itself, which found adoption far beyond
+          systemd), and its implementation is incomplete. With the future 262
+          release we intend to remove support for /run/boot-loader-entries/ and
+          related interfaces, in order to simplify our codebase. Support for
+          UAPI.1 is – of course – kept in place.
+
         Feature Removals and Incompatible Changes:
+
+        * systemd-nspawn's --user= option has been renamed to --uid=. The -u
+          short option continues to work. The old --user NAME and --user=NAME
+          form (with and without "=") are still accepted but deprecated; a warning
+          is emitted suggesting --uid=NAME. The --user option (without an argument)
+          has been repurposed as a standalone switch (without argument) to select
+          the user service manager scope, matching --system.
+
+        * Several configuration fields in the io.systemd.Unit varlink interface
+          that were previously exposed as plain strings have been converted to
+          proper enum types. This adds type safety and IDL-level validation.
+          The output wire format now uses underscores instead of dashes and
+          plus signs in enum values (e.g. "tty-force" becomes "tty_force",
+          "kmsg+console" becomes "kmsg_console"). The previous use of plain
+          strings for these well-defined enumerations is considered a bug.
+          Affected enum types: ExecInputType, ExecOutputType, ProtectHome,
+          CGroupController, CollectMode, EmergencyAction, JobMode.
 
         * It was discovered that systemd-stub does not measure all the events
           it measures to the TPM to the hardware CC registers (e.g. Intel TDX
@@ -13,13 +45,32 @@ CHANGES WITH 261 in spe:
           attestation environments which use hardware CC registers and not the
           TPM quote.
 
+        * systemd-nspawn gained a new --restrict-address-families= option (and
+          corresponding RestrictAddressFamilies= setting in .nspawn files) to
+          restrict which socket address families may be used in the container.
+          This is currently opt-in. In a future version, the default will be
+          changed to restrict socket address families to AF_INET, AF_INET6 and
+          AF_UNIX.
+
         New features:
+
+        * A new tmpfiles.d/root.conf has been added that sets permissions
+          on the root directory (/) to 0555
 
         * Networking to cloud IMDS services may be locked down for recognized
           clouds. This is recommended for secure installations, but typically
           conflicts with traditional IMDS clients such as cloud-init, which
           require direct IMDS access. The new meson option "-Dimds-network="
           can be used to change the default mode to "locked" at build-time.
+
+        Changes in systemd-sysext/systemd-confext:
+
+        * New initrd services systemd-sysext-sysroot.service and
+          systemd-confext-sysroot.service are provided. These services are
+          used to merge system and configuration extensions for the main system
+          from the initrd. This overcomes the limitation that system and
+          configuration extensions merged from the main system itself cannot be
+          used to modify the resources which are used in the early boot.
 
 CHANGES WITH 260:
 
@@ -682,9 +733,9 @@ CHANGES WITH 259:
         systemd-sysext/systemd-confext:
 
         * systemd-sysext and systemd-confext now support configuration files
-          /etc/systemd/systemd-sysext.conf and /etc/systemd/systemd-confext.conf,
-          which can be used to configure mutability or the image policy to
-          apply to DDI images.
+          /etc/systemd/sysext.conf and /etc/systemd/confext.conf, which can be
+          used to configure mutability or the image policy to apply to DDI
+          images.
 
         * systemd-sysext's and systemd-confext's --mutable= switch now accepts
           a new value "help" for listing available mutability modes.

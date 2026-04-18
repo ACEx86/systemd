@@ -11,11 +11,11 @@
 #include "discover-image.h"
 #include "fd-util.h"
 #include "gpt.h"
-#include "json-util.h"
 #include "network-util.h"
 #include "pretty-print.h"
 #include "resolve-util.h"
 #include "tests.h"
+#include "test-varlink-idl-util.h"
 #include "varlink-idl-util.h"
 #include "varlink-io.systemd.h"
 #include "varlink-io.systemd.AskPassword.h"
@@ -481,54 +481,6 @@ TEST(validate_method_call) {
         assert_se(pthread_join(t, NULL) == 0);
 }
 
-static void test_enum_to_string_name(const char *n, const sd_varlink_symbol *symbol) {
-        assert(n);
-        assert(symbol);
-
-        assert(symbol->symbol_type == SD_VARLINK_ENUM_TYPE);
-        _cleanup_free_ char *m = ASSERT_PTR(json_underscorify(strdup(n)));
-
-        bool found = false;
-        for (const sd_varlink_field *f = symbol->fields; f->name; f++) {
-                if (f->field_type == _SD_VARLINK_FIELD_COMMENT)
-                        continue;
-
-                assert(f->field_type == SD_VARLINK_ENUM_VALUE);
-                if (streq(m, f->name)) {
-                        found = true;
-                        break;
-                }
-        }
-
-        log_debug("'%s' found in '%s': %s", m, strna(symbol->name), yes_no(found));
-        assert(found);
-}
-
-#define TEST_IDL_ENUM_TO_STRING(type, ename, symbol)     \
-        for (type t = 0;; t++) {                         \
-                const char *n = ename##_to_string(t);    \
-                if (!n)                                  \
-                        break;                           \
-                test_enum_to_string_name(n, &(symbol));  \
-        }
-
-#define TEST_IDL_ENUM_FROM_STRING(type, ename, symbol)                  \
-        for (const sd_varlink_field *f = (symbol).fields; f->name; f++) { \
-                if (f->field_type == _SD_VARLINK_FIELD_COMMENT)         \
-                        continue;                                       \
-                assert(f->field_type == SD_VARLINK_ENUM_VALUE);         \
-                _cleanup_free_ char *m = ASSERT_PTR(json_dashify(strdup(f->name))); \
-                type t = ename##_from_string(m);                        \
-                log_debug("'%s' of '%s' translates: %s", f->name, strna((symbol).name), yes_no(t >= 0)); \
-                assert(t >= 0);                                         \
-        }
-
-#define TEST_IDL_ENUM(type, name, symbol)                       \
-        do {                                                    \
-                TEST_IDL_ENUM_TO_STRING(type, name, symbol);    \
-                TEST_IDL_ENUM_FROM_STRING(type, name, symbol);  \
-        } while (false)
-
 TEST(enums_idl) {
         TEST_IDL_ENUM(BootEntryType, boot_entry_type, vl_type_BootEntryType);
         TEST_IDL_ENUM_TO_STRING(BootEntrySource, boot_entry_source, vl_type_BootEntrySource);
@@ -619,6 +571,48 @@ TEST(null_map_element) {
         const char *bad_field = NULL;
         ASSERT_ERROR(varlink_idl_validate_method_call(&vl_method_MapTest, v, /* flags= */ 0, &bad_field), EMEDIUMTYPE);
         ASSERT_STREQ(bad_field, "m");
+}
+
+static SD_VARLINK_DEFINE_METHOD_FULL(
+                SupportsMoreMethod,
+                SD_VARLINK_SUPPORTS_MORE,
+                SD_VARLINK_DEFINE_OUTPUT(result, SD_VARLINK_STRING, 0));
+
+TEST(reply_continues_with_more_flag) {
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
+
+        ASSERT_OK(sd_json_buildo(&v, SD_JSON_BUILD_PAIR_STRING("result", "hello")));
+
+        const char *bad_field = NULL;
+        ASSERT_OK(varlink_idl_validate_method_reply(
+                &vl_method_SupportsMoreMethod, v, SD_VARLINK_REPLY_CONTINUES, &bad_field));
+        ASSERT_NULL(bad_field);
+
+        ASSERT_OK(varlink_idl_validate_method_reply(
+                &vl_method_SupportsMoreMethod, v, /* flags= */ 0, &bad_field));
+        ASSERT_NULL(bad_field);
+}
+
+static SD_VARLINK_DEFINE_METHOD(
+                NoMoreMethod,
+                SD_VARLINK_DEFINE_OUTPUT(result, SD_VARLINK_STRING, 0));
+
+TEST(reply_continues_without_more_flag) {
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
+
+        ASSERT_OK(sd_json_buildo(&v, SD_JSON_BUILD_PAIR_STRING("result", "hello")));
+
+        const char *bad_field = NULL;
+        /* Request a "continues" reply from a method without SD_VARLINK_SUPPORTS_MORE/REQUIRES_MORE - this
+         * should fail the validation with EBADE */
+        ASSERT_ERROR(varlink_idl_validate_method_reply(
+                &vl_method_NoMoreMethod, v, SD_VARLINK_REPLY_CONTINUES, &bad_field), EBADE);
+        ASSERT_NULL(bad_field);
+
+        /* Without the "continues" flag, validation should succeed */
+        ASSERT_OK(varlink_idl_validate_method_reply(
+                &vl_method_NoMoreMethod, v, /* flags= */ 0, &bad_field));
+        ASSERT_NULL(bad_field);
 }
 
 DEFINE_TEST_MAIN(LOG_DEBUG);
